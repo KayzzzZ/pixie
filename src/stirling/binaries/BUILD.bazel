@@ -44,6 +44,10 @@ pl_cc_binary(
         "//src/common/signal:cc_library",
         "//src/stirling:cc_library",
     ],
+    visibility = [
+        "//:__pkg__",
+        "//src/stirling:__subpackages__",
+    ],
 )
 
 cc_image(
@@ -68,6 +72,10 @@ pl_cc_binary(
     deps = [
         "//src/stirling:cc_library",
     ],
+    visibility = [
+        "//:__pkg__",
+        "//src/stirling:__subpackages__",
+    ],
 )
 
 cc_image(
@@ -91,6 +99,10 @@ pl_cc_binary(
     srcs = ["stirling_profiler.cc"],
     deps = [
         "//src/stirling:cc_library",
+    ],
+    visibility = [
+        "//:__pkg__",
+        "//src/stirling:__subpackages__",
     ],
 )
 

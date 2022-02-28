@@ -42,6 +42,8 @@ constexpr DataElement kHTTPElements[] = {
         canonical_data_elements::kUPID,
         canonical_data_elements::kRemoteAddr,
         canonical_data_elements::kRemotePort,
+        canonical_data_elements::kSourceAddr,
+        canonical_data_elements::kSourcePort,
         canonical_data_elements::kTraceRole,
         {"major_version", "HTTP major version, can be 1 or 2",
          types::DataType::INT64,
@@ -111,6 +113,8 @@ constexpr int kHTTPTimeIdx = kHTTPTable.ColIndex("time_");
 constexpr int kHTTPUPIDIdx = kHTTPTable.ColIndex("upid");
 constexpr int kHTTPRemoteAddrIdx = kHTTPTable.ColIndex("remote_addr");
 constexpr int kHTTPRemotePortIdx = kHTTPTable.ColIndex("remote_port");
+constexpr int kHTTPSourceAddrIdx = kHTTPTable.ColIndex("source_addr");
+constexpr int kHTTPSourcePortIdx = kHTTPTable.ColIndex("source_port");
 constexpr int kHTTPTraceRoleIdx = kHTTPTable.ColIndex("trace_role");
 constexpr int kHTTPMajorVersionIdx = kHTTPTable.ColIndex("major_version");
 constexpr int kHTTPMinorVersionIdx = kHTTPTable.ColIndex("minor_version");

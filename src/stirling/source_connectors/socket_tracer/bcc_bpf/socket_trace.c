@@ -25,6 +25,7 @@
 #include <linux/net.h>
 #include <linux/socket.h>
 #include <net/inet_sock.h>
+#include <linux/file.h>
 
 #define socklen_t size_t
 
@@ -113,6 +114,58 @@ BPF_PERCPU_ARRAY(control_values, int64_t, kNumControlValues);
  * General helper functions
  ***********************************************************/
 
+static __inline struct file *get_file_from_fd(int fd)
+{
+  struct task_struct *task;
+  struct files_struct *files;
+  struct fdtable *fdt;
+  int max_fds;
+  struct file **fds;
+  struct file *fil;
+
+  task = (struct task_struct *)bpf_get_current_task();
+  if (!task)
+    return NULL;
+
+  files = _READ(task->files);
+  if (!files)
+    return NULL;
+
+  fdt = _READ(files->fdt);
+  if (!fdt)
+    return NULL;
+
+  max_fds = _READ(fdt->max_fds);
+  if (fd >= max_fds)
+    return NULL;
+
+  fds = _READ(fdt->fd);
+  fil = _READ(fds[fd]);
+
+  return fil;
+}
+
+static __inline struct socket *get_socket_from_fd(int fd)
+{
+  struct file *file;
+  const struct file_operations *fop;
+  struct socket *sock;
+
+//  if (!data->settings->socket_file_ops)
+//    return NULL;
+
+  file = get_file_from_fd(fd);
+  if (!file)
+    return NULL;
+
+  fop = _READ(file->f_op);
+//  if (fop != data->settings->socket_file_ops)
+//    return NULL;
+
+  sock = _READ(file->private_data);
+  return sock;
+}
+
 static __inline uint64_t gen_tgid_fd(uint32_t tgid, int fd) {
   return ((uint64_t)tgid << 32) | (uint32_t)fd;
 }
@@ -181,6 +234,7 @@ static __inline struct conn_stats_event_t* fill_conn_stats_event(
 
   event->conn_id = conn_info->conn_id;
   event->addr = conn_info->addr;
+  event->source_addr = conn_info->source_addr;
   event->role = conn_info->role;
   event->wr_bytes = conn_info->wr_bytes;
   event->rd_bytes = conn_info->rd_bytes;
@@ -292,6 +346,35 @@ static __inline void update_traffic_class(struct conn_info_t* conn_info,
   }
 }
 
+static __inline void read_source_sockaddr_kernel(struct conn_info_t* conn_info, int32_t fd) {
+  struct socket* socket = get_socket_from_fd(fd);
+  struct sock *sk = _READ(socket->sk);
+//  struct sock* sk = NULL;
+  bpf_probe_read_kernel(&sk, sizeof(sk), &socket->sk);
+
+  struct sock_common* sk_common = &sk->__sk_common;
+  uint16_t family = -1;
+  // source port
+  uint16_t sport = -1;
+  bpf_probe_read_kernel(&sport, sizeof(sport), &((struct inet_sock *)sk)->inet_sport);
+//  sport = ((struct inet_sock *)sk)->inet_sport;
+
+  bpf_probe_read_kernel(&family, sizeof(family), &sk_common->skc_family);
+  conn_info->source_addr.sa.sa_family = family;
+
+  if (family == AF_INET) {
+    conn_info->source_addr.in4.sin_port = sport;
+
+    uint32_t* addr = &conn_info->source_addr.in4.sin_addr.s_addr;
+    bpf_probe_read_kernel(addr, sizeof(*addr), &sk_common->skc_rcv_saddr);
+  } else if (family == AF_INET6) {
+    conn_info->source_addr.in6.sin6_port = sport;
+
+    struct in6_addr* addr = &conn_info->source_addr.in6.sin6_addr;
+    bpf_probe_read_kernel(addr, sizeof(*addr), &sk_common->skc_v6_rcv_saddr);
+  }
+}
+
 /***********************************************************
  * Perf submit functions
  ***********************************************************/
@@ -334,6 +417,11 @@ static __inline void submit_new_conn(struct pt_regs* ctx, uint32_t tgid, int32_t
   } else if (socket != NULL) {
     read_sockaddr_kernel(&conn_info, socket);
   }
+  // fill source ip/port
+  read_source_sockaddr_kernel(&conn_info, fd);
+//  if (socket != NULL) {
+//  }
+
   conn_info.role = role;
 
   uint64_t tgid_fd = gen_tgid_fd(tgid, fd);
@@ -352,6 +440,7 @@ static __inline void submit_new_conn(struct pt_regs* ctx, uint32_t tgid, int32_t
   control_event.conn_id = conn_info.conn_id;
   control_event.open.addr = conn_info.addr;
   control_event.open.role = conn_info.role;
+  control_event.open.source_addr = conn_info.source_addr;
 
   socket_control_events.perf_submit(ctx, &control_event, sizeof(struct socket_control_event_t));
 }
@@ -573,7 +662,7 @@ static __inline void process_syscall_connect(struct pt_regs* ctx, uint64_t id,
     return;
   }
 
-  submit_new_conn(ctx, tgid, args->fd, args->addr, /*socket*/ NULL, kRoleClient);
+  submit_new_conn(ctx, tgid, args->fd, args->addr, /*socket*/ args->sock_alloc_socket, kRoleClient);
 }
 
 static __inline void process_syscall_accept(struct pt_regs* ctx, uint64_t id,
@@ -1512,6 +1601,21 @@ int syscall__probe_entry_mmap(struct pt_regs* ctx) {
   upid.start_time_ticks = get_tgid_start_time();
 
   mmap_events.perf_submit(ctx, &upid, sizeof(upid));
+
+  return 0;
+}
+
+int probe_ret_sockfd_lookup_light(struct pt_regs* ctx) {
+  uint64_t id = bpf_get_current_pid_tgid();
+
+  struct connect_args_t* connect_args = active_connect_args_map.lookup(&id);
+  if (connect_args == NULL) {
+    return 0;
+  }
+
+  if (connect_args->sock_alloc_socket == NULL) {
+    connect_args->sock_alloc_socket = (struct socket*)PT_REGS_RC(ctx);
+  }
 
   return 0;
 }

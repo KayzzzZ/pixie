@@ -225,48 +225,51 @@ void SocketTraceConnector::InitProtocolTransferSpecs() {
 
 using ProbeType = bpf_tools::BPFProbeAttachType;
 const auto kProbeSpecs = MakeArray<bpf_tools::KProbeSpec>(
-    {{"connect", ProbeType::kEntry, "syscall__probe_entry_connect"},
+    {
+      {"sockfd_lookup_light", ProbeType::kReturn, "probe_ret_sockfd_lookup_light", false},
+        {"connect", ProbeType::kEntry, "syscall__probe_entry_connect"},
      {"connect", ProbeType::kReturn, "syscall__probe_ret_connect"},
      {"accept", ProbeType::kEntry, "syscall__probe_entry_accept"},
      {"accept", ProbeType::kReturn, "syscall__probe_ret_accept"},
      {"accept4", ProbeType::kEntry, "syscall__probe_entry_accept4"},
      {"accept4", ProbeType::kReturn, "syscall__probe_ret_accept4"},
-     {"write", ProbeType::kEntry, "syscall__probe_entry_write"},
-     {"write", ProbeType::kReturn, "syscall__probe_ret_write"},
-     {"writev", ProbeType::kEntry, "syscall__probe_entry_writev"},
-     {"writev", ProbeType::kReturn, "syscall__probe_ret_writev"},
-     {"send", ProbeType::kEntry, "syscall__probe_entry_send"},
-     {"send", ProbeType::kReturn, "syscall__probe_ret_send"},
-     {"sendto", ProbeType::kEntry, "syscall__probe_entry_sendto"},
-     {"sendto", ProbeType::kReturn, "syscall__probe_ret_sendto"},
-     {"sendmsg", ProbeType::kEntry, "syscall__probe_entry_sendmsg"},
-     {"sendmsg", ProbeType::kReturn, "syscall__probe_ret_sendmsg"},
-     {"sendmmsg", ProbeType::kEntry, "syscall__probe_entry_sendmmsg"},
-     {"sendmmsg", ProbeType::kReturn, "syscall__probe_ret_sendmmsg"},
-     {"sendfile", ProbeType::kEntry, "syscall__probe_entry_sendfile"},
-     {"sendfile", ProbeType::kReturn, "syscall__probe_ret_sendfile"},
-     {"sendfile64", ProbeType::kEntry, "syscall__probe_entry_sendfile"},
-     {"sendfile64", ProbeType::kReturn, "syscall__probe_ret_sendfile"},
-     {"read", ProbeType::kEntry, "syscall__probe_entry_read"},
-     {"read", ProbeType::kReturn, "syscall__probe_ret_read"},
-     {"readv", ProbeType::kEntry, "syscall__probe_entry_readv"},
-     {"readv", ProbeType::kReturn, "syscall__probe_ret_readv"},
-     {"recv", ProbeType::kEntry, "syscall__probe_entry_recv"},
-     {"recv", ProbeType::kReturn, "syscall__probe_ret_recv"},
-     {"recvfrom", ProbeType::kEntry, "syscall__probe_entry_recvfrom"},
-     {"recvfrom", ProbeType::kReturn, "syscall__probe_ret_recvfrom"},
-     {"recvmsg", ProbeType::kEntry, "syscall__probe_entry_recvmsg"},
-     {"recvmsg", ProbeType::kReturn, "syscall__probe_ret_recvmsg"},
-     {"recvmmsg", ProbeType::kEntry, "syscall__probe_entry_recvmmsg"},
-     {"recvmmsg", ProbeType::kReturn, "syscall__probe_ret_recvmmsg"},
+//     {"write", ProbeType::kEntry, "syscall__probe_entry_write"},
+//     {"write", ProbeType::kReturn, "syscall__probe_ret_write"},
+//     {"writev", ProbeType::kEntry, "syscall__probe_entry_writev"},
+//     {"writev", ProbeType::kReturn, "syscall__probe_ret_writev"},
+//     {"send", ProbeType::kEntry, "syscall__probe_entry_send"},
+//     {"send", ProbeType::kReturn, "syscall__probe_ret_send"},
+//     {"sendto", ProbeType::kEntry, "syscall__probe_entry_sendto"},
+//     {"sendto", ProbeType::kReturn, "syscall__probe_ret_sendto"},
+//     {"sendmsg", ProbeType::kEntry, "syscall__probe_entry_sendmsg"},
+//     {"sendmsg", ProbeType::kReturn, "syscall__probe_ret_sendmsg"},
+//     {"sendmmsg", ProbeType::kEntry, "syscall__probe_entry_sendmmsg"},
+//     {"sendmmsg", ProbeType::kReturn, "syscall__probe_ret_sendmmsg"},
+//     {"sendfile", ProbeType::kEntry, "syscall__probe_entry_sendfile"},
+//     {"sendfile", ProbeType::kReturn, "syscall__probe_ret_sendfile"},
+//     {"sendfile64", ProbeType::kEntry, "syscall__probe_entry_sendfile"},
+//     {"sendfile64", ProbeType::kReturn, "syscall__probe_ret_sendfile"},
+//     {"read", ProbeType::kEntry, "syscall__probe_entry_read"},
+//     {"read", ProbeType::kReturn, "syscall__probe_ret_read"},
+//     {"readv", ProbeType::kEntry, "syscall__probe_entry_readv"},
+//     {"readv", ProbeType::kReturn, "syscall__probe_ret_readv"},
+//     {"recv", ProbeType::kEntry, "syscall__probe_entry_recv"},
+//     {"recv", ProbeType::kReturn, "syscall__probe_ret_recv"},
+//     {"recvfrom", ProbeType::kEntry, "syscall__probe_entry_recvfrom"},
+//     {"recvfrom", ProbeType::kReturn, "syscall__probe_ret_recvfrom"},
+//     {"recvmsg", ProbeType::kEntry, "syscall__probe_entry_recvmsg"},
+//     {"recvmsg", ProbeType::kReturn, "syscall__probe_ret_recvmsg"},
+//     {"recvmmsg", ProbeType::kEntry, "syscall__probe_entry_recvmmsg"},
+//     {"recvmmsg", ProbeType::kReturn, "syscall__probe_ret_recvmmsg"},
      {"close", ProbeType::kEntry, "syscall__probe_entry_close"},
      {"close", ProbeType::kReturn, "syscall__probe_ret_close"},
      {"mmap", ProbeType::kEntry, "syscall__probe_entry_mmap"},
      {"sock_alloc", ProbeType::kReturn, "probe_ret_sock_alloc", /*is_syscall*/ false},
-     {"security_socket_sendmsg", ProbeType::kEntry, "probe_entry_security_socket_sendmsg",
-      /*is_syscall*/ false},
-     {"security_socket_recvmsg", ProbeType::kEntry, "probe_entry_security_socket_recvmsg",
-      /*is_syscall*/ false}});
+//     {"security_socket_sendmsg", ProbeType::kEntry, "probe_entry_security_socket_sendmsg",
+//      /*is_syscall*/ false},
+//     {"security_socket_recvmsg", ProbeType::kEntry, "probe_entry_security_socket_recvmsg",
+//      /*is_syscall*/ false}
+    });
 
 using bpf_tools::PerfBufferSizeCategory;
 
@@ -745,42 +748,6 @@ void SocketTraceConnector::HandleHTTP2Event(void* cb_cookie, void* data, int /*d
 
   auto* connector = static_cast<SocketTraceConnector*>(cb_cookie);
 
-<<<<<<< HEAD
-  auto event = std::make_unique<HTTP2HeaderEvent>(data);
-
-  VLOG(3) << absl::Substitute(
-      "t=$0 pid=$1 type=$2 fd=$3 tsid=$4 stream_id=$5 end_stream=$6 name=$7 value=$8",
-      event->attr.timestamp_ns, event->attr.conn_id.upid.pid,
-      magic_enum::enum_name(event->attr.type), event->attr.conn_id.fd, event->attr.conn_id.tsid,
-      event->attr.stream_id, event->attr.end_stream, event->name, event->value);
-  connector->event_counter.Add({{"source_name", connector->name()},{"protocol", "http2"},{"event_type","header_event"},{"stage","poll_perf_buffer"},{"status","receive"}}).Increment();
-  connector->AcceptHTTP2Header(std::move(event));
-}
-
-void SocketTraceConnector::HandleHTTP2HeaderEventLoss(void* cb_cookie, uint64_t lost) {
-  DCHECK(cb_cookie != nullptr) << "Perf buffer callback not set-up properly. Missing cb_cookie.";
-  auto* connector = static_cast<SocketTraceConnector*>(cb_cookie);
-  connector->event_counter.Add({{"source_name", "socket_trace_connector"},{"protocol", "http2"},{"event_type","header_event"},{"stage","poll_perf_buffer"},{"status","loss"}}).Increment();
-  static_cast<SocketTraceConnector*>(cb_cookie)->stats_.Increment(StatKey::kLossGoGRPCHeaderEvent,
-                                                                  lost);
-}
-
-void SocketTraceConnector::HandleHTTP2Data(void* cb_cookie, void* data, int /*data_size*/) {
-  DCHECK(cb_cookie != nullptr) << "Perf buffer callback not set-up properly. Missing cb_cookie.";
-
-  auto* connector = static_cast<SocketTraceConnector*>(cb_cookie);
-  // Directly access data through a go_grpc_data_event_t pointer results in mis-aligned access.
-  // go_grpc_data_event_t is 8-bytes aligned, data is 4-bytes.
-  auto event = std::make_unique<HTTP2DataEvent>(data);
-
-  VLOG(3) << absl::Substitute(
-      "t=$0 pid=$1 type=$2 fd=$3 tsid=$4 stream_id=$5 end_stream=$6 data=$7",
-      event->attr.timestamp_ns, event->attr.conn_id.upid.pid,
-      magic_enum::enum_name(event->attr.type), event->attr.conn_id.fd, event->attr.conn_id.tsid,
-      event->attr.stream_id, event->attr.end_stream, event->payload);
-  connector->event_counter.Add({{"source_name", connector->name()},{"protocol", "http2"},{"event_type","data_event"},{"stage","poll_perf_buffer"},{"status","receive"}}).Increment();
-  connector->AcceptHTTP2Data(std::move(event));
-=======
   // Note: Directly accessing data through the data pointer can result in mis-aligned accesses.
   // This is because the perf buffer data starts at an offset of 4 bytes.
   // Accessing the event_type should be safe as long as it is 4-byte data type.
@@ -798,6 +765,7 @@ void SocketTraceConnector::HandleHTTP2Data(void* cb_cookie, void* data, int /*da
           event->attr.conn_id.tsid, event->attr.stream_id, event->attr.end_stream, event->name,
           event->value);
       connector->AcceptHTTP2Header(std::move(event));
+      connector->event_counter.Add({{"source_name", connector->name()},{"protocol", "http2"},{"event_type","header_event"},{"stage","poll_perf_buffer"},{"status","receive"}}).Increment();
     } break;
     case kDataFrameEventRead:
     case kDataFrameEventWrite: {
@@ -809,23 +777,19 @@ void SocketTraceConnector::HandleHTTP2Data(void* cb_cookie, void* data, int /*da
           magic_enum::enum_name(event->attr.event_type), event->attr.conn_id.fd,
           event->attr.conn_id.tsid, event->attr.stream_id, event->attr.end_stream, event->payload);
       connector->AcceptHTTP2Data(std::move(event));
+      connector->event_counter.Add({{"source_name", connector->name()},{"protocol", "http2"},{"event_type","data_event"},{"stage","poll_perf_buffer"},{"status","receive"}}).Increment();
     } break;
     default:
       LOG(DFATAL) << absl::Substitute("Unexpected event_type $0",
                                       magic_enum::enum_name(event_type));
   }
->>>>>>> upstream/main
 }
 
 void SocketTraceConnector::HandleHTTP2EventLoss(void* cb_cookie, uint64_t lost) {
   DCHECK(cb_cookie != nullptr) << "Perf buffer callback not set-up properly. Missing cb_cookie.";
-<<<<<<< HEAD
   auto* connector = static_cast<SocketTraceConnector*>(cb_cookie);
-  static_cast<SocketTraceConnector*>(cb_cookie)->stats_.Increment(StatKey::kLossHTTP2Data, lost);
-  connector->event_counter.Add({{"source_name", "socket_trace_connector"},{"protocol", "http2"},{"event_type","data_event"},{"stage","poll_perf_buffer"},{"status","loss"}}).Increment();
-=======
+  connector->event_counter.Add({{"source_name", "socket_trace_connector"},{"protocol", "http2"},{"event_type","event"},{"stage","poll_perf_buffer"},{"status","loss"}}).Increment();
   static_cast<SocketTraceConnector*>(cb_cookie)->stats_.Increment(StatKey::kLossHTTP2Event, lost);
->>>>>>> upstream/main
 }
 
 //-----------------------------------------------------------------------------
@@ -916,6 +880,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   // But std::move is not allowed because we re-use conn object.
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("major_version")>(1);
   r.Append<r.ColIndex("minor_version")>(resp_message.minor_version);
@@ -971,6 +937,9 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
     content_type = HTTPContentType::kGRPC;
   }
 
+  VLOG(1) << absl::Substitute("[grpc][http2] before record:$0, source_addr:$1, source_port:$2, remote_addr:$3, remote_port:$4",
+                                   record.ToString(), conn_tracker.source_endpoint().AddrStr(), conn_tracker.source_endpoint().port(), conn_tracker.remote_endpoint().AddrStr(), conn_tracker.remote_endpoint().port());
+
   ParseReqRespBody(&record, DataTable::kTruncatedMsg, kMaxPBStringLen);
 
   DataTable::RecordBuilder<&kHTTPTable> r(data_table, resp_stream->timestamp_ns);
@@ -978,6 +947,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("major_version")>(2);
   // HTTP2 does not define minor version.
@@ -1001,6 +972,7 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   int64_t latency_ns = CalculateLatency(req_stream->timestamp_ns, resp_stream->timestamp_ns);
   r.Append<r.ColIndex("latency")>(latency_ns);
   // TODO(yzhao): Remove once http2::Record::bpf_timestamp_ns is removed.
+  // TODO @qianlu.kk
   LOG_IF_EVERY_N(WARNING, latency_ns < 0, 100)
       << absl::Substitute("Negative latency found in HTTP2 records, record=$0", record.ToString());
 #ifndef NDEBUG

@@ -72,6 +72,11 @@ std::vector<std::string_view> GetSourceNamesForGroup(SourceConnectorGroup group)
 std::unique_ptr<SourceRegistry> CreateSourceRegistryFromFlag();
 
 /**
+ * Returns a source registry registered with the specified sources.
+ */
+StatusOr<std::unique_ptr<SourceRegistry>> CreateSourceRegistry(
+        const std::vector<std::string_view>& source_names);
+/**
  * Returns a source registry registered with all prod sources.
  */
 std::unique_ptr<SourceRegistry> CreateProdSourceRegistry();
