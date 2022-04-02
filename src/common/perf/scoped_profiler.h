@@ -52,6 +52,10 @@ class ScopedProfiler {
     CHECK(T::StartProfiler(output_path)) << "Failed to start profiler";
   }
 
+  bool Dump() {
+    return T::Dump();
+  }
+
   ~ScopedProfiler() {
     if (!enabled_) {
       return;

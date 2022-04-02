@@ -31,32 +31,42 @@ namespace profiler {
 bool CPU::ProfilerAvailable() { return ProfilingIsEnabledForAllThreads() == 0; }
 
 bool CPU::StartProfiler(const std::string& output_path) {
+  LOG(WARNING) << "[qianlu] start gperf cpu profiler ... ";
   return ProfilerStart(output_path.c_str()) != 0;
 }
 
-void CPU::StopProfiler() { return ProfilerStop(); }
+bool CPU::Dump() {
+  return true;
+}
+
+void CPU::StopProfiler() { LOG(WARNING) << "[qianlu] stop gperf cpu profiler ... "; return ProfilerStop(); }
 
 bool Heap::ProfilerAvailable() { return true; }
 
 bool Heap::IsProfilerStarted() { return IsHeapProfilerRunning() != 0; }
 
 bool Heap::StartProfiler(const std::string& output_path) {
+  LOG(WARNING) << "[qianlu] start gperf cpu profiler ... ";
   HeapProfilerStart(output_path.c_str());
   return true;
 }
 
 bool Heap::Dump() {
   if (IsHeapProfilerRunning() == 0) {
+    LOG(WARNING) << "[qianlu][dump] heap profiler not running ... ";
     return false;
   }
+  LOG(WARNING) << "[qianlu] begin to dump heap ... ";
   HeapProfilerDump("dump");
   return true;
 }
 
 bool Heap::StopProfiler() {
   if (IsHeapProfilerRunning() == 0) {
+    LOG(WARNING) << "[qianlu][stop] heap profiler not running ... ";
     return false;
   }
+  LOG(WARNING) << "[qianlu] start gperf cpu profiler ... ";
   HeapProfilerDump("stop and dump");
   HeapProfilerStop();
   return true;

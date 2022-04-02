@@ -19,6 +19,7 @@
 #pragma once
 
 #include <string>
+#include "src/common/base/base.h"
 // Most of this file is borrowed/inspired by envoy.
 // Profiling support is provided in the release tcmalloc, but not in the library
 // that supplies the debug tcmalloc. So all the profiling code must be ifdef'd
@@ -43,6 +44,8 @@ class CPU {
    * @return bool whether the call to start the profiler succeeded.
    */
   static bool StartProfiler(const std::string& output_path);
+
+  static bool Dump();
 
   /**
    * Stop the profiler.
