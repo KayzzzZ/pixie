@@ -19,14 +19,17 @@
 #include <string>
 
 #include <absl/functional/bind_front.h>
+#include <prometheus/counter.h>
 
 #include "src/common/fs/fs_wrapper.h"
+#include "src/common/metrics/metrics.h"
 #include "src/common/system/proc_parser.h"
 #include "src/stirling/source_connectors/perf_profiler/java/agent/raw_symbol_update.h"
 #include "src/stirling/source_connectors/perf_profiler/java/demangle.h"
+#include "src/stirling/source_connectors/perf_profiler/shared/symbolization.h"
 #include "src/stirling/source_connectors/perf_profiler/symbolizers/java_symbolizer.h"
 #include "src/stirling/utils/detect_application.h"
-#include "src/stirling/utils/proc_path_tools.h"
+#include "src/stirling/utils/proc_tracker.h"
 
 namespace {
 char const* const kLibsHelpMessage = "Comma separated list of Java symbolization agent lib files.";
@@ -34,23 +37,44 @@ char const* const kPEMAgentLibs =
     "/pl/lib-px-java-agent-musl.so,"
     "/pl/lib-px-java-agent-glibc.so";
 }  // namespace
+
 DEFINE_string(stirling_profiler_java_agent_libs, kPEMAgentLibs, kLibsHelpMessage);
+DECLARE_bool(stirling_profiler_java_symbols);
+DEFINE_uint32(number_attach_attempts_per_iteration, 1,
+              "Number of JVMTI agents that can be attached in a single perf profiler iteration.");
 
 namespace px {
 namespace stirling {
 
 namespace {
-StatusOr<std::filesystem::path> ResolveHostArtifactsPath(const struct upid_t& target_upid) {
-  const std::filesystem::path artifacts_path = java::AgentArtifactsPath(target_upid);
 
-  // TODO(jps): To avoid repeated accesses to /proc, investigate if we can reuse the
-  // results of this call into ResolvePath. e.g., if we need to resolve the /tmp mount
-  // in some other stirling component.
-  std::unique_ptr<FilePathResolver> fp_resolver;
-  PL_ASSIGN_OR_RETURN(fp_resolver, FilePathResolver::Create(target_upid.pid));
-  return fp_resolver->ResolvePath(artifacts_path);
-}
+constexpr char kJavaProcCounter[] = "java_proc";
+constexpr char kJavaProcAttachedCounter[] = "java_proc_attached";
+
+prometheus::Counter& g_java_proc_counter{
+    BuildCounter(kJavaProcCounter, "Count of the Java processes")};
+
+prometheus::Counter& g_java_proc_attach_attempted_counter{BuildCounter(
+    kJavaProcAttachedCounter, "Count of the Java processes that has profiling agent attached")};
+
+prometheus::Counter& g_java_proc_attached_counter{BuildCounter(
+    kJavaProcAttachedCounter, "Count of the Java processes that has profiling agent attached")};
+
 }  // namespace
+
+void JavaSymbolizationContext::RemoveArtifacts() const {
+  if (host_artifacts_path_resolved_) {
+    // Remove the host artifacts path entirely; this cleans up all the files (and the subdir) we
+    // created inside of the target container mount namespace.
+    const auto& sysconfig = system::Config::GetInstance();
+    const std::filesystem::path host_artifacts_path = sysconfig.ToHostPath(host_artifacts_path_);
+    if (fs::Exists(host_artifacts_path)) {
+      const Status s = fs::RemoveAll(host_artifacts_path);
+      char const* const warn = "Could not remove host artifacts path: $0, $1.";
+      LOG_IF(WARNING, !s.ok()) << absl::Substitute(warn, host_artifacts_path_.string(), s.msg());
+    }
+  }
+}
 
 void JavaSymbolizationContext::UpdateSymbolMap() {
   auto reset_symbol_file = [&](const auto pos) {
@@ -114,9 +138,8 @@ void JavaSymbolizationContext::UpdateSymbolMap() {
     fn_sig.assign(buffer.data() + update.FnSigOffset(), update.fn_sig_size - 1);
     class_sig.assign(buffer.data() + update.ClassSigOffset(), update.class_sig_size - 1);
 
-    // TODO(jps): Move the jsym_pfx to a common header. Consider adding it in the demangler.
-    constexpr std::string_view jsym_pfx = "[j] ";
-    const std::string demangled = absl::StrCat(jsym_pfx, java::Demangle(symbol, class_sig, fn_sig));
+    using symbolization::kJavaPrefix;
+    const auto demangled = absl::StrCat(kJavaPrefix, java::Demangle(symbol, class_sig, fn_sig));
 
     // TODO(jps): Change to uint32_t in java::RawSymbolUpdate.
     const uint32_t code_size = static_cast<uint32_t>(update.code_size);
@@ -132,7 +155,7 @@ JavaSymbolizationContext::JavaSymbolizationContext(const struct upid_t& target_u
   DCHECK(symbol_file_->good());
   UpdateSymbolMap();
 
-  auto status_or_host_artifacts_path = ResolveHostArtifactsPath(target_upid);
+  auto status_or_host_artifacts_path = java::ResolveHostArtifactsPath(target_upid);
 
   if (!status_or_host_artifacts_path.ok()) {
     char const* const fmt = "Could not resolve host path for symbolization artifacts. pid: $0. $1.";
@@ -143,21 +166,7 @@ JavaSymbolizationContext::JavaSymbolizationContext(const struct upid_t& target_u
   host_artifacts_path_resolved_ = true;
 }
 
-JavaSymbolizationContext::~JavaSymbolizationContext() {
-  symbol_file_->close();
-
-  if (host_artifacts_path_resolved_) {
-    // Remove the host artifacts path entirely; this cleans up all the files (and the subdir) we
-    // created inside of the target container mount namespace.
-    const auto& sysconfig = system::Config::GetInstance();
-    const std::filesystem::path host_artifacts_path = sysconfig.ToHostPath(host_artifacts_path_);
-    const Status remove_status = fs::RemoveAll(host_artifacts_path);
-    if (!remove_status.ok()) {
-      char const* const fmt = "Could not remove host artifacts path: $0, $1.";
-      LOG(WARNING) << absl::Substitute(fmt, host_artifacts_path_.string(), remove_status.msg());
-    }
-  }
-}
+JavaSymbolizationContext::~JavaSymbolizationContext() { symbol_file_->close(); }
 
 std::string_view JavaSymbolizationContext::Symbolize(const uintptr_t addr) {
   if (requires_refresh_) {
@@ -220,12 +229,22 @@ void JavaSymbolizer::IterationPreTick() {
   for (auto& [upid, ctx] : symbolization_contexts_) {
     ctx->set_requires_refresh();
   }
+  num_attaches_remaining_this_iteration_ = FLAGS_number_attach_attempts_per_iteration;
+  monitor_.ResetJavaProcessAttachTrackers();
 }
 
 void JavaSymbolizer::DeleteUPID(const struct upid_t& upid) {
-  // The inner map is owned by a unique_ptr; this will free the memory.
+  auto iter = symbolization_contexts_.find(upid);
+  if (iter != symbolization_contexts_.end()) {
+    // Remove the symbolization artifacts to clean up any persistent mounts that may
+    // re-appear if the container for the target Java process is restarted.
+    iter->second->RemoveArtifacts();
+
+    // Release memory used for the Java symbol index.
+    symbolization_contexts_.erase(iter);
+  }
+
   symbolizer_functions_.erase(upid);
-  symbolization_contexts_.erase(upid);
   native_symbolizer_->DeleteUPID(upid);
 }
 
@@ -300,6 +319,7 @@ bool JavaSymbolizer::Uncacheable(const struct upid_t& upid) {
 
   // Successful attach; delete the attacher.
   active_attachers_.erase(upid);
+  g_java_proc_attached_counter.Increment();
 
   // Attempt to open the symbol file and create a new Java symbolization context.
   const Status new_ctx_status = CreateNewJavaSymbolizationContext(upid);
@@ -341,9 +361,13 @@ profiler::SymbolizerFn JavaSymbolizer::GetSymbolizerFn(const struct upid_t& upid
     return native_symbolizer_fn;
   }
 
+  // This process is a java process, increment the counter.
+  g_java_proc_counter.Increment();
+
   const std::filesystem::path symbol_file_path = java::StirlingSymbolFilePath(upid);
 
   if (fs::Exists(symbol_file_path)) {
+    LOG(INFO) << absl::Substitute("Found a pre-existing symbol file for pid: $0", upid.pid);
     // Found a pre-existing symbol file. Attempt to use it.
     const Status new_ctx_status = CreateNewJavaSymbolizationContext(upid);
     if (!new_ctx_status.ok()) {
@@ -361,11 +385,38 @@ profiler::SymbolizerFn JavaSymbolizer::GetSymbolizerFn(const struct upid_t& upid
     return symbolizer_functions_[upid];
   }
 
+  // When we get here, we know that it is a Java process, and if we want symbols,
+  // we need to inject the JVMTI symbolization agent.
+
+  if (!FLAGS_stirling_profiler_java_symbols) {
+    // The perf profile source connector was instantiated with Java symbolization enabled,
+    // but now it is disabled. The contract in this scenario is that we do not
+    // attempt to attach any more JVMTI agents.
+    LOG_FIRST_N(INFO, 1) << "New Java process detected, but Java symbols disabled.";
+    symbolizer_functions_[upid] = native_symbolizer_fn;
+    return native_symbolizer_fn;
+  }
+
+  if (num_attaches_remaining_this_iteration_ == 0) {
+    // We have reached our limit of JVMTI agent attaches for this iteration.
+    // Early out w/ native symbolizer, but *do not* store this in the symbolizer functions
+    // map (we want to try to inject an agent on the next iteration).
+    return native_symbolizer_fn;
+  }
+
+  // Increment attempt counter, and notify the Stirling monitor, before trying to attach.
+  g_java_proc_attach_attempted_counter.Increment();
+  monitor_.NotifyJavaProcessAttach(upid);
+
   // Create an agent attacher and put it into the active attachers map.
   const auto [iter, inserted] = active_attachers_.try_emplace(upid, nullptr);
   DCHECK(inserted);
   if (inserted) {
+    JavaProfilingProcTracker::GetSingleton()->Add(upid);
     iter->second = std::make_unique<java::AgentAttacher>(upid, agent_libs_);
+
+    // Deduct one from our quota of attach attempts per iteration.
+    --num_attaches_remaining_this_iteration_;
   }
 
   // We need this to be non-blocking; immediately return using the native symbolizer function.

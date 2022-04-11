@@ -524,7 +524,9 @@ func (m *DeploymentKey) GetUserID() *uuidpb.UUID {
 }
 
 type CreateDeploymentKeyRequest struct {
-	Desc string `protobuf:"bytes,1,opt,name=desc,proto3" json:"desc,omitempty"`
+	Desc   string       `protobuf:"bytes,1,opt,name=desc,proto3" json:"desc,omitempty"`
+	OrgID  *uuidpb.UUID `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	UserID *uuidpb.UUID `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 }
 
 func (m *CreateDeploymentKeyRequest) Reset()      { *m = CreateDeploymentKeyRequest{} }
@@ -566,7 +568,22 @@ func (m *CreateDeploymentKeyRequest) GetDesc() string {
 	return ""
 }
 
+func (m *CreateDeploymentKeyRequest) GetOrgID() *uuidpb.UUID {
+	if m != nil {
+		return m.OrgID
+	}
+	return nil
+}
+
+func (m *CreateDeploymentKeyRequest) GetUserID() *uuidpb.UUID {
+	if m != nil {
+		return m.UserID
+	}
+	return nil
+}
+
 type ListDeploymentKeyRequest struct {
+	OrgID *uuidpb.UUID `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 }
 
 func (m *ListDeploymentKeyRequest) Reset()      { *m = ListDeploymentKeyRequest{} }
@@ -600,6 +617,13 @@ func (m *ListDeploymentKeyRequest) XXX_DiscardUnknown() {
 }
 
 var xxx_messageInfo_ListDeploymentKeyRequest proto.InternalMessageInfo
+
+func (m *ListDeploymentKeyRequest) GetOrgID() *uuidpb.UUID {
+	if m != nil {
+		return m.OrgID
+	}
+	return nil
+}
 
 type ListDeploymentKeyResponse struct {
 	Keys []*DeploymentKeyMetadata `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
@@ -645,7 +669,8 @@ func (m *ListDeploymentKeyResponse) GetKeys() []*DeploymentKeyMetadata {
 }
 
 type GetDeploymentKeyRequest struct {
-	ID *uuidpb.UUID `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ID    *uuidpb.UUID `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrgID *uuidpb.UUID `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 }
 
 func (m *GetDeploymentKeyRequest) Reset()      { *m = GetDeploymentKeyRequest{} }
@@ -683,6 +708,13 @@ var xxx_messageInfo_GetDeploymentKeyRequest proto.InternalMessageInfo
 func (m *GetDeploymentKeyRequest) GetID() *uuidpb.UUID {
 	if m != nil {
 		return m.ID
+	}
+	return nil
+}
+
+func (m *GetDeploymentKeyRequest) GetOrgID() *uuidpb.UUID {
+	if m != nil {
+		return m.OrgID
 	}
 	return nil
 }
@@ -730,6 +762,57 @@ func (m *GetDeploymentKeyResponse) GetKey() *DeploymentKey {
 	return nil
 }
 
+type DeleteDeploymentKeyRequest struct {
+	ID    *uuidpb.UUID `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrgID *uuidpb.UUID `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+}
+
+func (m *DeleteDeploymentKeyRequest) Reset()      { *m = DeleteDeploymentKeyRequest{} }
+func (*DeleteDeploymentKeyRequest) ProtoMessage() {}
+func (*DeleteDeploymentKeyRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_7b112f5a7e47f58f, []int{13}
+}
+func (m *DeleteDeploymentKeyRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DeleteDeploymentKeyRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DeleteDeploymentKeyRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *DeleteDeploymentKeyRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeleteDeploymentKeyRequest.Merge(m, src)
+}
+func (m *DeleteDeploymentKeyRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *DeleteDeploymentKeyRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_DeleteDeploymentKeyRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DeleteDeploymentKeyRequest proto.InternalMessageInfo
+
+func (m *DeleteDeploymentKeyRequest) GetID() *uuidpb.UUID {
+	if m != nil {
+		return m.ID
+	}
+	return nil
+}
+
+func (m *DeleteDeploymentKeyRequest) GetOrgID() *uuidpb.UUID {
+	if m != nil {
+		return m.OrgID
+	}
+	return nil
+}
+
 type LookupDeploymentKeyRequest struct {
 	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 }
@@ -737,7 +820,7 @@ type LookupDeploymentKeyRequest struct {
 func (m *LookupDeploymentKeyRequest) Reset()      { *m = LookupDeploymentKeyRequest{} }
 func (*LookupDeploymentKeyRequest) ProtoMessage() {}
 func (*LookupDeploymentKeyRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_7b112f5a7e47f58f, []int{13}
+	return fileDescriptor_7b112f5a7e47f58f, []int{14}
 }
 func (m *LookupDeploymentKeyRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -780,7 +863,7 @@ type LookupDeploymentKeyResponse struct {
 func (m *LookupDeploymentKeyResponse) Reset()      { *m = LookupDeploymentKeyResponse{} }
 func (*LookupDeploymentKeyResponse) ProtoMessage() {}
 func (*LookupDeploymentKeyResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_7b112f5a7e47f58f, []int{14}
+	return fileDescriptor_7b112f5a7e47f58f, []int{15}
 }
 func (m *LookupDeploymentKeyResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -825,7 +908,7 @@ type RegisterVizierDeploymentRequest struct {
 func (m *RegisterVizierDeploymentRequest) Reset()      { *m = RegisterVizierDeploymentRequest{} }
 func (*RegisterVizierDeploymentRequest) ProtoMessage() {}
 func (*RegisterVizierDeploymentRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_7b112f5a7e47f58f, []int{15}
+	return fileDescriptor_7b112f5a7e47f58f, []int{16}
 }
 func (m *RegisterVizierDeploymentRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -876,13 +959,14 @@ func (m *RegisterVizierDeploymentRequest) GetK8sClusterName() string {
 }
 
 type RegisterVizierDeploymentResponse struct {
-	VizierID *uuidpb.UUID `protobuf:"bytes,1,opt,name=vizier_id,json=vizierId,proto3" json:"vizier_id,omitempty"`
+	VizierID   *uuidpb.UUID `protobuf:"bytes,1,opt,name=vizier_id,json=vizierId,proto3" json:"vizier_id,omitempty"`
+	VizierName string       `protobuf:"bytes,2,opt,name=vizier_name,json=vizierName,proto3" json:"vizier_name,omitempty"`
 }
 
 func (m *RegisterVizierDeploymentResponse) Reset()      { *m = RegisterVizierDeploymentResponse{} }
 func (*RegisterVizierDeploymentResponse) ProtoMessage() {}
 func (*RegisterVizierDeploymentResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_7b112f5a7e47f58f, []int{16}
+	return fileDescriptor_7b112f5a7e47f58f, []int{17}
 }
 func (m *RegisterVizierDeploymentResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -918,6 +1002,56 @@ func (m *RegisterVizierDeploymentResponse) GetVizierID() *uuidpb.UUID {
 	return nil
 }
 
+func (m *RegisterVizierDeploymentResponse) GetVizierName() string {
+	if m != nil {
+		return m.VizierName
+	}
+	return ""
+}
+
+type GetOrgFromVizierResponse struct {
+	OrgID *uuidpb.UUID `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+}
+
+func (m *GetOrgFromVizierResponse) Reset()      { *m = GetOrgFromVizierResponse{} }
+func (*GetOrgFromVizierResponse) ProtoMessage() {}
+func (*GetOrgFromVizierResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_7b112f5a7e47f58f, []int{18}
+}
+func (m *GetOrgFromVizierResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetOrgFromVizierResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetOrgFromVizierResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetOrgFromVizierResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetOrgFromVizierResponse.Merge(m, src)
+}
+func (m *GetOrgFromVizierResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetOrgFromVizierResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetOrgFromVizierResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetOrgFromVizierResponse proto.InternalMessageInfo
+
+func (m *GetOrgFromVizierResponse) GetOrgID() *uuidpb.UUID {
+	if m != nil {
+		return m.OrgID
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*CreateVizierClusterRequest)(nil), "px.services.internal.CreateVizierClusterRequest")
 	proto.RegisterType((*GetViziersByOrgResponse)(nil), "px.services.internal.GetViziersByOrgResponse")
@@ -933,10 +1067,12 @@ func init() {
 	proto.RegisterType((*ListDeploymentKeyResponse)(nil), "px.services.internal.ListDeploymentKeyResponse")
 	proto.RegisterType((*GetDeploymentKeyRequest)(nil), "px.services.internal.GetDeploymentKeyRequest")
 	proto.RegisterType((*GetDeploymentKeyResponse)(nil), "px.services.internal.GetDeploymentKeyResponse")
+	proto.RegisterType((*DeleteDeploymentKeyRequest)(nil), "px.services.internal.DeleteDeploymentKeyRequest")
 	proto.RegisterType((*LookupDeploymentKeyRequest)(nil), "px.services.internal.LookupDeploymentKeyRequest")
 	proto.RegisterType((*LookupDeploymentKeyResponse)(nil), "px.services.internal.LookupDeploymentKeyResponse")
 	proto.RegisterType((*RegisterVizierDeploymentRequest)(nil), "px.services.internal.RegisterVizierDeploymentRequest")
 	proto.RegisterType((*RegisterVizierDeploymentResponse)(nil), "px.services.internal.RegisterVizierDeploymentResponse")
+	proto.RegisterType((*GetOrgFromVizierResponse)(nil), "px.services.internal.GetOrgFromVizierResponse")
 }
 
 func init() {
@@ -944,85 +1080,89 @@ func init() {
 }
 
 var fileDescriptor_7b112f5a7e47f58f = []byte{
-	// 1236 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x57, 0xbf, 0x6f, 0xdb, 0xc6,
-	0x17, 0x17, 0x25, 0x59, 0xb6, 0x9e, 0x2c, 0x5b, 0xb9, 0x7c, 0x93, 0x28, 0x0c, 0x40, 0x39, 0x0c,
-	0xf2, 0x4d, 0xda, 0x34, 0x54, 0xe2, 0x34, 0x85, 0x6d, 0x34, 0x28, 0x62, 0xab, 0x0d, 0x14, 0xc7,
-	0x35, 0xc2, 0x58, 0x46, 0x60, 0x14, 0x15, 0x28, 0xf1, 0x4c, 0xb3, 0x92, 0x48, 0x96, 0x77, 0x32,
-	0x22, 0x0f, 0x45, 0xd1, 0xad, 0x5b, 0xe7, 0x6e, 0x5d, 0x8a, 0xfe, 0x27, 0xed, 0xe8, 0xa9, 0xc8,
-	0x24, 0xd4, 0xf4, 0xd2, 0x31, 0x5b, 0xb7, 0xa2, 0x20, 0x8f, 0x67, 0xfd, 0x30, 0x19, 0xcb, 0xcd,
-	0xd4, 0xc5, 0x26, 0x8f, 0x9f, 0xf7, 0xde, 0xe7, 0xfd, 0x3e, 0xc1, 0x4d, 0xe2, 0x36, 0xcb, 0xcd,
-	0xb6, 0xdd, 0xd5, 0xcb, 0xfb, 0x07, 0x1d, 0xc3, 0x65, 0x7f, 0x9d, 0x46, 0x99, 0x60, 0x77, 0xdf,
-	0x6c, 0x62, 0xc5, 0x71, 0x6d, 0x6a, 0xa3, 0xff, 0x39, 0xaf, 0x94, 0xf0, 0x84, 0x28, 0xa6, 0x45,
-	0xb1, 0x6b, 0x69, 0x6d, 0xf1, 0xae, 0x61, 0xd2, 0xbd, 0x6e, 0x43, 0x69, 0xda, 0x9d, 0xb2, 0x61,
-	0x1b, 0x76, 0x39, 0x00, 0x37, 0xba, 0xbb, 0xc1, 0x5b, 0xf0, 0x12, 0x3c, 0x31, 0x25, 0xe2, 0x35,
-	0xc3, 0xb6, 0x8d, 0x36, 0x1e, 0xa0, 0x70, 0xc7, 0xa1, 0xbd, 0xf0, 0x63, 0x69, 0xfc, 0x23, 0x35,
-	0x3b, 0x98, 0x50, 0xad, 0xe3, 0x70, 0x80, 0xcf, 0x54, 0x73, 0x4c, 0x86, 0x28, 0x77, 0xbb, 0xa6,
-	0xee, 0x34, 0x82, 0x7f, 0x21, 0x60, 0xc1, 0x07, 0x90, 0x3d, 0xcd, 0xc5, 0x7a, 0xb9, 0xb9, 0xdf,
-	0x21, 0x06, 0x71, 0x1a, 0xe1, 0x03, 0x43, 0xc8, 0x2e, 0x88, 0x6b, 0x2e, 0xd6, 0x28, 0xde, 0x36,
-	0x0f, 0x4c, 0xec, 0xae, 0xb5, 0xbb, 0x84, 0x62, 0x57, 0xc5, 0x5f, 0x77, 0x31, 0xa1, 0xe8, 0x3e,
-	0x64, 0x6c, 0xd7, 0xa8, 0x9b, 0x7a, 0x51, 0x58, 0x10, 0x6e, 0xe7, 0x16, 0xe7, 0x15, 0xe7, 0x95,
-	0xc2, 0xcc, 0x28, 0xb5, 0x5a, 0xb5, 0xb2, 0x9a, 0xf5, 0xfa, 0xa5, 0xa9, 0x4d, 0xd7, 0xa8, 0x56,
-	0xd4, 0x29, 0xdb, 0x35, 0xaa, 0x3a, 0xba, 0x0e, 0xb3, 0x8e, 0x6b, 0x7f, 0x85, 0x9b, 0xb4, 0x6e,
-	0x69, 0x1d, 0x5c, 0x4c, 0x2e, 0x08, 0xb7, 0xb3, 0x6a, 0x2e, 0x3c, 0xfb, 0x5c, 0xeb, 0x60, 0xf9,
-	0x25, 0x5c, 0x79, 0x82, 0x29, 0x33, 0x48, 0x56, 0x7b, 0x9b, 0xae, 0xa1, 0x62, 0xe2, 0xd8, 0x16,
-	0xc1, 0xe8, 0x11, 0xc0, 0x7e, 0x70, 0x5e, 0x37, 0x75, 0x52, 0x14, 0x16, 0x52, 0x51, 0x46, 0xf3,
-	0x5e, 0xbf, 0x94, 0x65, 0xe2, 0xd5, 0x0a, 0x51, 0xb3, 0x4c, 0xa2, 0xaa, 0x13, 0xf9, 0x1b, 0x28,
-	0x0e, 0x6b, 0x7e, 0xb1, 0xa7, 0xb9, 0x3a, 0xf7, 0xe5, 0x01, 0xe4, 0x77, 0x5d, 0xbb, 0x53, 0xf7,
-	0xc3, 0xa1, 0x73, 0x97, 0xb2, 0xab, 0xf3, 0x5e, 0xbf, 0x94, 0xfb, 0xcc, 0xb5, 0x3b, 0x01, 0xb8,
-	0x5a, 0x51, 0x73, 0xbb, 0x27, 0x2f, 0x3a, 0xba, 0x0b, 0x39, 0x6a, 0x0f, 0x44, 0x02, 0x67, 0x98,
-	0xfd, 0x2d, 0x9b, 0x0b, 0x64, 0x69, 0xf8, 0xa8, 0xcb, 0x3f, 0x26, 0xe1, 0x6a, 0x04, 0x81, 0xd0,
-	0xb9, 0x2d, 0x98, 0x66, 0x54, 0xb9, 0x67, 0x2b, 0x4a, 0x54, 0x0d, 0x29, 0xb1, 0x1a, 0x94, 0xd0,
-	0x69, 0x6b, 0xd7, 0x56, 0xb9, 0x2a, 0xf1, 0x67, 0x01, 0x60, 0x70, 0x8e, 0x56, 0x20, 0x7b, 0x12,
-	0xc1, 0xb8, 0xac, 0xcd, 0x7a, 0xfd, 0xd2, 0x0c, 0x0f, 0xa0, 0x3a, 0xc3, 0xe3, 0x37, 0x94, 0xee,
-	0xe4, 0xa4, 0xe9, 0xbe, 0x01, 0xd3, 0xad, 0x25, 0x52, 0xef, 0x9a, 0x7a, 0x31, 0x1d, 0x04, 0x07,
-	0xbc, 0x7e, 0x29, 0xb3, 0xbe, 0x44, 0x6a, 0xd5, 0x8a, 0x9a, 0x69, 0x2d, 0x91, 0x9a, 0xa9, 0x3f,
-	0x4d, 0xcf, 0xa4, 0x0a, 0x69, 0x79, 0x1b, 0x2e, 0x9d, 0x78, 0xe6, 0x53, 0x25, 0x3c, 0x33, 0xef,
-	0x98, 0xf4, 0x2d, 0xb8, 0x3c, 0xae, 0x37, 0x0c, 0xf8, 0x0a, 0xcc, 0x72, 0xc5, 0xfe, 0x79, 0xa8,
-	0xfa, 0x8a, 0xaf, 0x9a, 0x77, 0xc3, 0x70, 0x48, 0x73, 0xfb, 0x03, 0x1d, 0xf2, 0xdf, 0x02, 0x5c,
-	0xaa, 0x60, 0xa7, 0x6d, 0xf7, 0x3a, 0xd8, 0xa2, 0xeb, 0xb8, 0xb7, 0x81, 0xa9, 0xa6, 0x6b, 0x54,
-	0x43, 0xb7, 0x20, 0x19, 0x1f, 0xda, 0x8c, 0xd7, 0x2f, 0x25, 0xab, 0x15, 0x35, 0x69, 0xea, 0x68,
-	0x19, 0xa0, 0x19, 0xf4, 0x96, 0x5e, 0xd7, 0x68, 0x31, 0x15, 0x08, 0x88, 0x0a, 0x6b, 0x6a, 0x85,
-	0x37, 0xb5, 0xb2, 0xc5, 0x9b, 0x5a, 0xcd, 0x86, 0xe8, 0xc7, 0x14, 0x21, 0x48, 0xeb, 0x98, 0x34,
-	0x59, 0x4c, 0xd5, 0xe0, 0x79, 0x28, 0x3b, 0x53, 0x93, 0x66, 0xe7, 0x43, 0x98, 0xee, 0x12, 0x56,
-	0x0a, 0x99, 0x68, 0x99, 0x20, 0x5d, 0x35, 0x12, 0x14, 0x42, 0xc6, 0xc7, 0x56, 0xfd, 0x74, 0x25,
-	0x0b, 0x29, 0xf9, 0xbb, 0x24, 0xe4, 0x47, 0x02, 0x30, 0xb9, 0xe3, 0x05, 0x48, 0xb5, 0x70, 0x2f,
-	0x6c, 0x7d, 0xff, 0xf1, 0xbf, 0x1a, 0x0a, 0xf9, 0x1e, 0x1f, 0x8f, 0x23, 0x91, 0xe0, 0x85, 0xcb,
-	0xa9, 0x09, 0x03, 0x6a, 0xb2, 0x08, 0xc5, 0x67, 0x26, 0xa1, 0x51, 0x78, 0xf9, 0x0b, 0xb8, 0x1a,
-	0xf1, 0x2d, 0x2c, 0xd6, 0x4f, 0x20, 0xdd, 0xc2, 0x3d, 0x5e, 0xa4, 0x77, 0xa2, 0x47, 0x43, 0x64,
-	0x45, 0xaa, 0x81, 0xa0, 0xbc, 0x1a, 0x8c, 0xd5, 0x48, 0xa2, 0x93, 0x66, 0x4e, 0x7e, 0x1e, 0x0c,
-	0xd0, 0x68, 0x82, 0x0f, 0x59, 0x56, 0x99, 0x96, 0x1b, 0x13, 0xf0, 0x0b, 0x52, 0x2f, 0x2b, 0x20,
-	0x3e, 0xb3, 0xed, 0x56, 0xd7, 0x89, 0x64, 0x56, 0x18, 0x28, 0x65, 0xa5, 0x22, 0x6f, 0xc1, 0xb5,
-	0x48, 0xfc, 0xbb, 0xb1, 0xf8, 0x55, 0x80, 0x92, 0x8a, 0x0d, 0xd3, 0xdf, 0x6e, 0xac, 0xe5, 0x07,
-	0x20, 0xce, 0x65, 0x19, 0xe6, 0xfd, 0x59, 0xd6, 0x64, 0x3b, 0x30, 0x98, 0x69, 0x6c, 0x47, 0x5c,
-	0xf0, 0xfa, 0xa5, 0xfc, 0xfa, 0x12, 0x09, 0xb7, 0xa3, 0x3f, 0xda, 0xf2, 0xad, 0xc1, 0xab, 0xa9,
-	0xa3, 0x9b, 0x30, 0xa7, 0x9f, 0xe8, 0xab, 0x0f, 0x8a, 0x3f, 0xaf, 0x8f, 0x74, 0xd0, 0xc7, 0x50,
-	0x18, 0xb6, 0x10, 0x2c, 0xc8, 0x54, 0x60, 0x02, 0x79, 0xfd, 0xd2, 0xdc, 0xc0, 0x84, 0xbf, 0x27,
-	0xd5, 0xb9, 0xd6, 0xc8, 0xfb, 0xd3, 0xf4, 0x4c, 0xba, 0x30, 0x25, 0x7f, 0x09, 0x0b, 0xf1, 0x8e,
-	0x9c, 0x0c, 0xbe, 0x7f, 0xbd, 0x04, 0x16, 0x7f, 0xcf, 0xc0, 0xec, 0xf6, 0xce, 0x86, 0xe1, 0xbe,
-	0x60, 0x71, 0x45, 0x2f, 0xe1, 0x62, 0xc4, 0x15, 0x01, 0xdd, 0x8b, 0x8e, 0x7d, 0xfc, 0x6d, 0x42,
-	0x1c, 0xa7, 0x80, 0x9e, 0xc3, 0xfc, 0xd8, 0x45, 0x00, 0x8d, 0x63, 0xc4, 0xbb, 0x67, 0xef, 0xc8,
-	0xe1, 0x0b, 0xc4, 0x32, 0xe4, 0x47, 0x96, 0xc1, 0x69, 0x85, 0x71, 0xe3, 0x1f, 0x51, 0xb8, 0x70,
-	0x6a, 0xf3, 0x22, 0x65, 0xe2, 0x15, 0xcd, 0x7c, 0x2c, 0x9f, 0x73, 0xa5, 0xa3, 0x8d, 0xa1, 0xcb,
-	0xd0, 0x9a, 0x6d, 0x59, 0xb8, 0x49, 0x4d, 0xdb, 0x8a, 0xa6, 0x7e, 0x3d, 0x82, 0xfa, 0x98, 0x4c,
-	0x0b, 0xe6, 0x46, 0x97, 0x21, 0xba, 0x73, 0x06, 0xa3, 0xe1, 0x55, 0x2c, 0x7e, 0x30, 0x19, 0x38,
-	0xe4, 0x5e, 0x83, 0xf9, 0x11, 0x12, 0x58, 0x47, 0xf2, 0x08, 0xc5, 0xd1, 0x42, 0xe5, 0x46, 0xa4,
-	0xb7, 0x60, 0x1e, 0x37, 0x5b, 0x08, 0x03, 0xaa, 0x39, 0xfa, 0xa0, 0x8a, 0x6c, 0x6b, 0xd7, 0x34,
-	0xd0, 0xff, 0x47, 0xa4, 0x4e, 0x03, 0xb8, 0xf6, 0x5b, 0x67, 0xe2, 0x42, 0xf6, 0x16, 0x5c, 0x62,
-	0x5f, 0x37, 0xdd, 0xaa, 0x45, 0xa8, 0xd6, 0x6e, 0x33, 0x18, 0x7a, 0x2f, 0x42, 0xc3, 0x18, 0x86,
-	0x1b, 0x7b, 0x7f, 0x12, 0x28, 0xb3, 0xb7, 0xf8, 0x57, 0x0a, 0x2e, 0x6f, 0xef, 0x8c, 0xcc, 0x26,
-	0xde, 0x62, 0x75, 0xc8, 0xb0, 0xbe, 0x79, 0x7b, 0x57, 0x45, 0x4d, 0x50, 0x71, 0x92, 0x19, 0x88,
-	0x0c, 0x48, 0xfb, 0x9b, 0x27, 0xae, 0x9c, 0xe3, 0x36, 0x56, 0x5c, 0x39, 0xc7, 0x6f, 0x31, 0x1d,
-	0x52, 0x4f, 0x30, 0x45, 0xf1, 0x5d, 0x1b, 0x69, 0x46, 0x99, 0x14, 0x1e, 0x5a, 0xb9, 0x0f, 0x99,
-	0x0a, 0x6e, 0x63, 0x8a, 0x4f, 0xf7, 0xc8, 0xe5, 0x53, 0xb7, 0x8a, 0x4f, 0xfd, 0x9f, 0x54, 0xe8,
-	0x00, 0x2e, 0x46, 0xac, 0x95, 0xb8, 0x78, 0xc7, 0x6f, 0x2c, 0xf1, 0xfe, 0x39, 0x24, 0xc2, 0xcc,
-	0xff, 0x24, 0xc0, 0xc5, 0xe1, 0xcc, 0xf3, 0xb4, 0x7f, 0x2f, 0x40, 0x31, 0x6e, 0x96, 0xa3, 0x87,
-	0xd1, 0x76, 0xce, 0x58, 0x62, 0xe2, 0x47, 0xe7, 0x15, 0x63, 0x1c, 0x57, 0x1f, 0x1d, 0x1e, 0x49,
-	0x89, 0xd7, 0x47, 0x52, 0xe2, 0xcd, 0x91, 0x24, 0x7c, 0xeb, 0x49, 0xc2, 0x2f, 0x9e, 0x24, 0xfc,
-	0xe6, 0x49, 0xc2, 0xa1, 0x27, 0x09, 0x7f, 0x78, 0x92, 0xf0, 0xa7, 0x27, 0x25, 0xde, 0x78, 0x92,
-	0xf0, 0xc3, 0xb1, 0x94, 0x38, 0x3c, 0x96, 0x12, 0xaf, 0x8f, 0xa5, 0xc4, 0xce, 0x74, 0xf8, 0xdb,
-	0xb8, 0x91, 0x09, 0xc2, 0xfd, 0xe0, 0x9f, 0x00, 0x00, 0x00, 0xff, 0xff, 0x2e, 0xc9, 0x46, 0x80,
-	0x3d, 0x0f, 0x00, 0x00,
+	// 1305 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x58, 0xcf, 0x6f, 0xdb, 0xe4,
+	0x1b, 0x8f, 0x93, 0x34, 0x6d, 0x9e, 0x34, 0x6d, 0xf6, 0xee, 0xbb, 0x2d, 0xf3, 0x24, 0xa7, 0xf3,
+	0xb4, 0xef, 0x06, 0xa3, 0x0e, 0xeb, 0x18, 0x6a, 0x2b, 0x26, 0xb4, 0x36, 0x30, 0x65, 0x5d, 0xa9,
+	0xe6, 0x36, 0xd5, 0x54, 0x21, 0x45, 0x4e, 0xfc, 0xd6, 0x35, 0x49, 0x6c, 0xe3, 0xd7, 0xa9, 0x9a,
+	0x1e, 0x00, 0x71, 0xe3, 0xc6, 0x11, 0xb8, 0x71, 0x41, 0x48, 0xfc, 0x21, 0x70, 0xec, 0x71, 0xa7,
+	0x88, 0xba, 0x17, 0x8e, 0xfb, 0x0b, 0x10, 0xf2, 0xfb, 0xda, 0xf9, 0x55, 0x7b, 0x4d, 0x36, 0x71,
+	0xe0, 0xd2, 0xda, 0xaf, 0x3f, 0xcf, 0xef, 0xe7, 0x79, 0x9f, 0x4f, 0x0b, 0xb7, 0x89, 0x5d, 0x2f,
+	0xd6, 0x9b, 0x66, 0x5b, 0x2d, 0x1e, 0x1e, 0xb7, 0x34, 0x9b, 0xfd, 0xb4, 0x6a, 0x45, 0x82, 0xed,
+	0x43, 0xbd, 0x8e, 0x25, 0xcb, 0x36, 0x1d, 0x13, 0xfd, 0xcf, 0x3a, 0x92, 0xfc, 0x13, 0x22, 0xe9,
+	0x86, 0x83, 0x6d, 0x43, 0x69, 0xf2, 0x8b, 0x9a, 0xee, 0x1c, 0xb4, 0x6b, 0x52, 0xdd, 0x6c, 0x15,
+	0x35, 0x53, 0x33, 0x8b, 0x14, 0x5c, 0x6b, 0xef, 0xd3, 0x37, 0xfa, 0x42, 0x9f, 0x98, 0x12, 0xfe,
+	0x86, 0x66, 0x9a, 0x5a, 0x13, 0xf7, 0x51, 0xb8, 0x65, 0x39, 0x1d, 0xff, 0x63, 0x61, 0xf4, 0xa3,
+	0xa3, 0xb7, 0x30, 0x71, 0x94, 0x96, 0x15, 0x00, 0x3c, 0x4f, 0x15, 0x4b, 0x67, 0x88, 0x62, 0xbb,
+	0xad, 0xab, 0x56, 0x8d, 0xfe, 0xf2, 0x01, 0x0b, 0x1e, 0x80, 0x1c, 0x28, 0x36, 0x56, 0x8b, 0xf5,
+	0xc3, 0x16, 0xd1, 0x88, 0x55, 0xf3, 0x1f, 0x18, 0x42, 0xb4, 0x81, 0x5f, 0xb7, 0xb1, 0xe2, 0xe0,
+	0x5d, 0xfd, 0x58, 0xc7, 0xf6, 0x7a, 0xb3, 0x4d, 0x1c, 0x6c, 0xcb, 0xf8, 0xcb, 0x36, 0x26, 0x0e,
+	0xba, 0x0f, 0x29, 0xd3, 0xd6, 0xaa, 0xba, 0x9a, 0xe7, 0x16, 0xb8, 0xbb, 0x99, 0xa5, 0x79, 0xc9,
+	0x3a, 0x92, 0x98, 0x19, 0xa9, 0x52, 0x29, 0x97, 0xd6, 0xd2, 0x6e, 0xb7, 0x30, 0xb5, 0x65, 0x6b,
+	0xe5, 0x92, 0x3c, 0x65, 0xda, 0x5a, 0x59, 0x45, 0x37, 0x61, 0xd6, 0xb2, 0xcd, 0x2f, 0x70, 0xdd,
+	0xa9, 0x1a, 0x4a, 0x0b, 0xe7, 0xe3, 0x0b, 0xdc, 0xdd, 0xb4, 0x9c, 0xf1, 0xcf, 0x3e, 0x53, 0x5a,
+	0x58, 0x7c, 0x01, 0xd7, 0x9e, 0x60, 0x87, 0x19, 0x24, 0x6b, 0x9d, 0x2d, 0x5b, 0x93, 0x31, 0xb1,
+	0x4c, 0x83, 0x60, 0xf4, 0x08, 0xe0, 0x90, 0x9e, 0x57, 0x75, 0x95, 0xe4, 0xb9, 0x85, 0x44, 0x98,
+	0xd1, 0xac, 0xdb, 0x2d, 0xa4, 0x99, 0x78, 0xb9, 0x44, 0xe4, 0x34, 0x93, 0x28, 0xab, 0x44, 0xfc,
+	0x0a, 0xf2, 0x83, 0x9a, 0xb7, 0x0f, 0x14, 0x5b, 0x0d, 0x62, 0x79, 0x00, 0xd9, 0x7d, 0xdb, 0x6c,
+	0x55, 0xbd, 0x74, 0xa8, 0x41, 0x48, 0xe9, 0xb5, 0x79, 0xb7, 0x5b, 0xc8, 0x7c, 0x6a, 0x9b, 0x2d,
+	0x0a, 0x2e, 0x97, 0xe4, 0xcc, 0x7e, 0xef, 0x45, 0x45, 0x8b, 0x90, 0x71, 0xcc, 0xbe, 0x08, 0x0d,
+	0x86, 0xd9, 0xdf, 0x31, 0x03, 0x81, 0xb4, 0xe3, 0x3f, 0xaa, 0xe2, 0x4f, 0x71, 0xb8, 0x1e, 0xe2,
+	0x80, 0x1f, 0xdc, 0x0e, 0x4c, 0x33, 0x57, 0x83, 0xc8, 0x56, 0xa5, 0xb0, 0x1e, 0x92, 0x22, 0x35,
+	0x48, 0x7e, 0xd0, 0xc6, 0xbe, 0x29, 0x07, 0xaa, 0xf8, 0x5f, 0x38, 0x80, 0xfe, 0x39, 0x5a, 0x85,
+	0x74, 0x2f, 0x83, 0x51, 0x55, 0x9b, 0x75, 0xbb, 0x85, 0x99, 0x20, 0x81, 0xf2, 0x4c, 0x90, 0xbf,
+	0x81, 0x72, 0xc7, 0xc7, 0x2d, 0xf7, 0x2d, 0x98, 0x6e, 0x2c, 0x93, 0x6a, 0x5b, 0x57, 0xf3, 0x49,
+	0x9a, 0x1c, 0x70, 0xbb, 0x85, 0xd4, 0xc6, 0x32, 0xa9, 0x94, 0x4b, 0x72, 0xaa, 0xb1, 0x4c, 0x2a,
+	0xba, 0xfa, 0x34, 0x39, 0x93, 0xc8, 0x25, 0xc5, 0x5d, 0xb8, 0xd2, 0x8b, 0xcc, 0x73, 0x95, 0x04,
+	0x95, 0x79, 0xcb, 0xa2, 0xef, 0xc0, 0xd5, 0x51, 0xbd, 0x7e, 0xc2, 0x57, 0x61, 0x36, 0x50, 0xec,
+	0x9d, 0xfb, 0xaa, 0xaf, 0x79, 0xaa, 0x83, 0x69, 0x18, 0x4c, 0x69, 0xe6, 0xb0, 0xaf, 0x43, 0xfc,
+	0x9b, 0x83, 0x2b, 0x25, 0x6c, 0x35, 0xcd, 0x4e, 0x0b, 0x1b, 0xce, 0x06, 0xee, 0x6c, 0x62, 0x47,
+	0x51, 0x15, 0x47, 0x41, 0x77, 0x20, 0x1e, 0x9d, 0xda, 0x94, 0xdb, 0x2d, 0xc4, 0xcb, 0x25, 0x39,
+	0xae, 0xab, 0x68, 0x05, 0xa0, 0x4e, 0x67, 0x4b, 0xad, 0x2a, 0x4e, 0x3e, 0x41, 0x05, 0x78, 0x89,
+	0x0d, 0xb5, 0x14, 0x0c, 0xb5, 0xb4, 0x13, 0x0c, 0xb5, 0x9c, 0xf6, 0xd1, 0x8f, 0x1d, 0x84, 0x20,
+	0xa9, 0x62, 0x52, 0x67, 0x39, 0x95, 0xe9, 0xf3, 0x40, 0x75, 0xa6, 0xc6, 0xad, 0xce, 0x07, 0x30,
+	0xdd, 0x26, 0xac, 0x15, 0x52, 0xe1, 0x32, 0xb4, 0x5c, 0x15, 0x42, 0x1b, 0x21, 0xe5, 0x61, 0xcb,
+	0x5e, 0xb9, 0xe2, 0xb9, 0x84, 0xf8, 0x6d, 0x1c, 0xb2, 0x43, 0x09, 0x18, 0x3f, 0xf0, 0x1c, 0x24,
+	0x1a, 0xb8, 0xe3, 0x8f, 0xbe, 0xf7, 0xf8, 0x5f, 0x4d, 0x85, 0xf8, 0x23, 0x17, 0xdc, 0x8f, 0x43,
+	0xa9, 0x08, 0x3a, 0x37, 0xf0, 0x8d, 0x0b, 0xf5, 0x2d, 0xfe, 0x06, 0xbe, 0x25, 0xc6, 0xf7, 0x6d,
+	0x13, 0xf2, 0xcf, 0x74, 0xe2, 0x84, 0x3a, 0x36, 0xf9, 0xc5, 0x2d, 0x7e, 0x0e, 0xd7, 0x43, 0xd4,
+	0xf9, 0x93, 0xf4, 0x31, 0x24, 0x1b, 0xb8, 0x13, 0x4c, 0xd0, 0xbd, 0xf0, 0x7b, 0x2b, 0x74, 0x5c,
+	0x64, 0x2a, 0x28, 0xb6, 0xe9, 0x9d, 0x1f, 0xea, 0xeb, 0xd8, 0x6d, 0x35, 0x79, 0x66, 0xc5, 0xe7,
+	0x74, 0x21, 0x84, 0xc7, 0xf4, 0x90, 0x75, 0x29, 0x33, 0x7c, 0x6b, 0x8c, 0x90, 0x68, 0x2b, 0x8b,
+	0x47, 0xc0, 0x97, 0x70, 0x13, 0x47, 0x74, 0xc4, 0xbf, 0x19, 0x8c, 0x04, 0xfc, 0x33, 0xd3, 0x6c,
+	0xb4, 0xad, 0x50, 0xcb, 0xb9, 0x7e, 0x38, 0x6c, 0xe8, 0xc4, 0x1d, 0xb8, 0x11, 0x8a, 0x7f, 0xbb,
+	0xf8, 0x7f, 0xe7, 0xa0, 0x20, 0x63, 0x4d, 0xf7, 0x78, 0x02, 0xbb, 0x3c, 0xfb, 0xa0, 0xc0, 0x97,
+	0x15, 0x98, 0xf7, 0xb6, 0x42, 0x9d, 0xb1, 0x09, 0xba, 0x1d, 0xd8, 0xb6, 0xbd, 0xe4, 0x76, 0x0b,
+	0xd9, 0x8d, 0x65, 0xe2, 0xf3, 0x0c, 0x6f, 0x49, 0x64, 0x1b, 0xfd, 0x57, 0x5d, 0x45, 0xb7, 0x61,
+	0x4e, 0xed, 0xe9, 0xab, 0xf6, 0xaf, 0x91, 0xac, 0x3a, 0x74, 0x17, 0x7d, 0x04, 0xb9, 0x41, 0x0b,
+	0x94, 0x6a, 0x24, 0xa8, 0x09, 0xe4, 0x76, 0x0b, 0x73, 0x7d, 0x13, 0x1e, 0xe3, 0x90, 0xe7, 0x1a,
+	0x43, 0xef, 0x4f, 0x93, 0x33, 0xc9, 0xdc, 0x94, 0xf8, 0x35, 0x2c, 0x44, 0x07, 0xd2, 0x5b, 0x21,
+	0x6f, 0xbe, 0x4e, 0x0b, 0xe0, 0x6f, 0x94, 0x41, 0x26, 0xe4, 0xaf, 0x3a, 0x4a, 0x84, 0x36, 0x69,
+	0x77, 0x6e, 0xd9, 0x9a, 0xc7, 0x3f, 0x98, 0x82, 0x9e, 0xe1, 0xc9, 0x27, 0x78, 0xe9, 0xb7, 0x69,
+	0x98, 0xdd, 0xdd, 0xdb, 0xd4, 0xec, 0x6d, 0x56, 0x47, 0xf4, 0x02, 0x2e, 0x87, 0x90, 0x3b, 0xf4,
+	0x7e, 0x78, 0xad, 0xa3, 0x79, 0x20, 0x3f, 0x6a, 0x1c, 0x3d, 0x87, 0xf9, 0x11, 0x0a, 0x87, 0x46,
+	0x31, 0xfc, 0xe2, 0xc5, 0xec, 0x66, 0x90, 0xfa, 0xad, 0x40, 0x76, 0x68, 0x8d, 0x9f, 0x57, 0x18,
+	0xb5, 0xb8, 0x91, 0x03, 0x97, 0xce, 0x71, 0x26, 0x24, 0x8d, 0x4d, 0xae, 0x58, 0x8c, 0xc5, 0x09,
+	0xc9, 0x18, 0xda, 0x1c, 0xa0, 0xb1, 0xeb, 0xa6, 0x61, 0xe0, 0xba, 0xa3, 0x9b, 0x46, 0xb8, 0xeb,
+	0x37, 0x43, 0x5c, 0x1f, 0x91, 0x69, 0xc0, 0xdc, 0x30, 0x8d, 0x41, 0xf7, 0x2e, 0xf0, 0x68, 0x90,
+	0x44, 0xf1, 0xef, 0x8d, 0x07, 0xf6, 0x7d, 0xaf, 0xc0, 0xfc, 0x90, 0x13, 0x58, 0x45, 0xe2, 0x90,
+	0x8b, 0xc3, 0x83, 0x11, 0x18, 0x11, 0x5e, 0x83, 0x79, 0x5c, 0x6f, 0x20, 0x0c, 0xa8, 0x62, 0xa9,
+	0xfd, 0x2e, 0x32, 0x8d, 0x7d, 0x5d, 0x43, 0xff, 0x1f, 0x92, 0x3a, 0x0f, 0x08, 0xb4, 0xdf, 0xb9,
+	0x10, 0xe7, 0x7b, 0x6f, 0xc0, 0x15, 0xf6, 0x75, 0xcb, 0x2e, 0x1b, 0xc4, 0x51, 0x9a, 0x4d, 0x06,
+	0x43, 0xef, 0x84, 0x68, 0x18, 0xc1, 0x04, 0xc6, 0xde, 0x1d, 0x07, 0xea, 0xdb, 0xdb, 0x86, 0xdc,
+	0xe8, 0x9c, 0x9e, 0x2f, 0x71, 0x74, 0xbf, 0x85, 0x0e, 0xf8, 0xd2, 0x0f, 0x49, 0xb8, 0xba, 0xbb,
+	0x37, 0x74, 0xc1, 0x06, 0x73, 0x5b, 0x85, 0x14, 0x1b, 0xc6, 0xd7, 0x8f, 0x6a, 0xd8, 0x1a, 0xe0,
+	0xc7, 0xb9, 0xc8, 0x91, 0x06, 0x49, 0x6f, 0xd7, 0x47, 0xcd, 0x48, 0x14, 0xad, 0x88, 0x9a, 0x91,
+	0x68, 0xde, 0xa0, 0x42, 0xe2, 0x09, 0x76, 0x50, 0xf4, 0x55, 0x10, 0x6a, 0x46, 0x1a, 0x17, 0xee,
+	0x5b, 0x91, 0x21, 0xc5, 0x56, 0x72, 0x54, 0xbe, 0xa2, 0x17, 0x36, 0x7f, 0xf5, 0x1c, 0x0b, 0xfd,
+	0xc4, 0xfb, 0x13, 0x1c, 0x1d, 0xc3, 0xe5, 0x90, 0xe5, 0x19, 0x65, 0x20, 0x7a, 0x2f, 0xf3, 0xf7,
+	0x27, 0x90, 0xf0, 0x5b, 0xe3, 0x67, 0x0e, 0x2e, 0x0f, 0xb6, 0x46, 0xd0, 0x17, 0xdf, 0x71, 0x90,
+	0x8f, 0xda, 0x58, 0xe8, 0x61, 0xb8, 0x9d, 0x0b, 0x56, 0x35, 0xff, 0xe1, 0xa4, 0x62, 0xcc, 0xc7,
+	0xb5, 0x47, 0x27, 0xa7, 0x42, 0xec, 0xe5, 0xa9, 0x10, 0x7b, 0x75, 0x2a, 0x70, 0xdf, 0xb8, 0x02,
+	0xf7, 0xab, 0x2b, 0x70, 0x7f, 0xb8, 0x02, 0x77, 0xe2, 0x0a, 0xdc, 0x9f, 0xae, 0xc0, 0xfd, 0xe5,
+	0x0a, 0xb1, 0x57, 0xae, 0xc0, 0x7d, 0x7f, 0x26, 0xc4, 0x4e, 0xce, 0x84, 0xd8, 0xcb, 0x33, 0x21,
+	0xb6, 0x37, 0xed, 0xff, 0x2f, 0xa5, 0x96, 0xa2, 0xe9, 0x7e, 0xf0, 0x4f, 0x00, 0x00, 0x00, 0xff,
+	0xff, 0xb0, 0x9a, 0x3e, 0x27, 0x6d, 0x11, 0x00, 0x00,
 }
 
 func (this *CreateVizierClusterRequest) Equal(that interface{}) bool {
@@ -1322,6 +1462,12 @@ func (this *CreateDeploymentKeyRequest) Equal(that interface{}) bool {
 	if this.Desc != that1.Desc {
 		return false
 	}
+	if !this.OrgID.Equal(that1.OrgID) {
+		return false
+	}
+	if !this.UserID.Equal(that1.UserID) {
+		return false
+	}
 	return true
 }
 func (this *ListDeploymentKeyRequest) Equal(that interface{}) bool {
@@ -1341,6 +1487,9 @@ func (this *ListDeploymentKeyRequest) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
+		return false
+	}
+	if !this.OrgID.Equal(that1.OrgID) {
 		return false
 	}
 	return true
@@ -1396,6 +1545,9 @@ func (this *GetDeploymentKeyRequest) Equal(that interface{}) bool {
 	if !this.ID.Equal(that1.ID) {
 		return false
 	}
+	if !this.OrgID.Equal(that1.OrgID) {
+		return false
+	}
 	return true
 }
 func (this *GetDeploymentKeyResponse) Equal(that interface{}) bool {
@@ -1418,6 +1570,33 @@ func (this *GetDeploymentKeyResponse) Equal(that interface{}) bool {
 		return false
 	}
 	if !this.Key.Equal(that1.Key) {
+		return false
+	}
+	return true
+}
+func (this *DeleteDeploymentKeyRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*DeleteDeploymentKeyRequest)
+	if !ok {
+		that2, ok := that.(DeleteDeploymentKeyRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.ID.Equal(that1.ID) {
+		return false
+	}
+	if !this.OrgID.Equal(that1.OrgID) {
 		return false
 	}
 	return true
@@ -1520,6 +1699,33 @@ func (this *RegisterVizierDeploymentResponse) Equal(that interface{}) bool {
 		return false
 	}
 	if !this.VizierID.Equal(that1.VizierID) {
+		return false
+	}
+	if this.VizierName != that1.VizierName {
+		return false
+	}
+	return true
+}
+func (this *GetOrgFromVizierResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetOrgFromVizierResponse)
+	if !ok {
+		that2, ok := that.(GetOrgFromVizierResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.OrgID.Equal(that1.OrgID) {
 		return false
 	}
 	return true
@@ -1661,9 +1867,15 @@ func (this *CreateDeploymentKeyRequest) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 7)
 	s = append(s, "&vzmgrpb.CreateDeploymentKeyRequest{")
 	s = append(s, "Desc: "+fmt.Sprintf("%#v", this.Desc)+",\n")
+	if this.OrgID != nil {
+		s = append(s, "OrgID: "+fmt.Sprintf("%#v", this.OrgID)+",\n")
+	}
+	if this.UserID != nil {
+		s = append(s, "UserID: "+fmt.Sprintf("%#v", this.UserID)+",\n")
+	}
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -1671,8 +1883,11 @@ func (this *ListDeploymentKeyRequest) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 4)
+	s := make([]string, 0, 5)
 	s = append(s, "&vzmgrpb.ListDeploymentKeyRequest{")
+	if this.OrgID != nil {
+		s = append(s, "OrgID: "+fmt.Sprintf("%#v", this.OrgID)+",\n")
+	}
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -1692,10 +1907,13 @@ func (this *GetDeploymentKeyRequest) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 6)
 	s = append(s, "&vzmgrpb.GetDeploymentKeyRequest{")
 	if this.ID != nil {
 		s = append(s, "ID: "+fmt.Sprintf("%#v", this.ID)+",\n")
+	}
+	if this.OrgID != nil {
+		s = append(s, "OrgID: "+fmt.Sprintf("%#v", this.OrgID)+",\n")
 	}
 	s = append(s, "}")
 	return strings.Join(s, "")
@@ -1708,6 +1926,21 @@ func (this *GetDeploymentKeyResponse) GoString() string {
 	s = append(s, "&vzmgrpb.GetDeploymentKeyResponse{")
 	if this.Key != nil {
 		s = append(s, "Key: "+fmt.Sprintf("%#v", this.Key)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DeleteDeploymentKeyRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vzmgrpb.DeleteDeploymentKeyRequest{")
+	if this.ID != nil {
+		s = append(s, "ID: "+fmt.Sprintf("%#v", this.ID)+",\n")
+	}
+	if this.OrgID != nil {
+		s = append(s, "OrgID: "+fmt.Sprintf("%#v", this.OrgID)+",\n")
 	}
 	s = append(s, "}")
 	return strings.Join(s, "")
@@ -1750,10 +1983,23 @@ func (this *RegisterVizierDeploymentResponse) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 6)
 	s = append(s, "&vzmgrpb.RegisterVizierDeploymentResponse{")
 	if this.VizierID != nil {
 		s = append(s, "VizierID: "+fmt.Sprintf("%#v", this.VizierID)+",\n")
+	}
+	s = append(s, "VizierName: "+fmt.Sprintf("%#v", this.VizierName)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetOrgFromVizierResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vzmgrpb.GetOrgFromVizierResponse{")
+	if this.OrgID != nil {
+		s = append(s, "OrgID: "+fmt.Sprintf("%#v", this.OrgID)+",\n")
 	}
 	s = append(s, "}")
 	return strings.Join(s, "")
@@ -1788,6 +2034,7 @@ type VZMgrServiceClient interface {
 	VizierConnected(ctx context.Context, in *cvmsgspb.RegisterVizierRequest, opts ...grpc.CallOption) (*cvmsgspb.RegisterVizierAck, error)
 	UpdateVizierConfig(ctx context.Context, in *cvmsgspb.UpdateVizierConfigRequest, opts ...grpc.CallOption) (*cvmsgspb.UpdateVizierConfigResponse, error)
 	UpdateOrInstallVizier(ctx context.Context, in *cvmsgspb.UpdateOrInstallVizierRequest, opts ...grpc.CallOption) (*cvmsgspb.UpdateOrInstallVizierResponse, error)
+	GetOrgFromVizier(ctx context.Context, in *uuidpb.UUID, opts ...grpc.CallOption) (*GetOrgFromVizierResponse, error)
 }
 
 type vZMgrServiceClient struct {
@@ -1879,6 +2126,15 @@ func (c *vZMgrServiceClient) UpdateOrInstallVizier(ctx context.Context, in *cvms
 	return out, nil
 }
 
+func (c *vZMgrServiceClient) GetOrgFromVizier(ctx context.Context, in *uuidpb.UUID, opts ...grpc.CallOption) (*GetOrgFromVizierResponse, error) {
+	out := new(GetOrgFromVizierResponse)
+	err := c.cc.Invoke(ctx, "/px.services.internal.VZMgrService/GetOrgFromVizier", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VZMgrServiceServer is the server API for VZMgrService service.
 type VZMgrServiceServer interface {
 	CreateVizierCluster(context.Context, *CreateVizierClusterRequest) (*uuidpb.UUID, error)
@@ -1890,6 +2146,7 @@ type VZMgrServiceServer interface {
 	VizierConnected(context.Context, *cvmsgspb.RegisterVizierRequest) (*cvmsgspb.RegisterVizierAck, error)
 	UpdateVizierConfig(context.Context, *cvmsgspb.UpdateVizierConfigRequest) (*cvmsgspb.UpdateVizierConfigResponse, error)
 	UpdateOrInstallVizier(context.Context, *cvmsgspb.UpdateOrInstallVizierRequest) (*cvmsgspb.UpdateOrInstallVizierResponse, error)
+	GetOrgFromVizier(context.Context, *uuidpb.UUID) (*GetOrgFromVizierResponse, error)
 }
 
 // UnimplementedVZMgrServiceServer can be embedded to have forward compatible implementations.
@@ -1922,6 +2179,9 @@ func (*UnimplementedVZMgrServiceServer) UpdateVizierConfig(ctx context.Context, 
 }
 func (*UnimplementedVZMgrServiceServer) UpdateOrInstallVizier(ctx context.Context, req *cvmsgspb.UpdateOrInstallVizierRequest) (*cvmsgspb.UpdateOrInstallVizierResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateOrInstallVizier not implemented")
+}
+func (*UnimplementedVZMgrServiceServer) GetOrgFromVizier(ctx context.Context, req *uuidpb.UUID) (*GetOrgFromVizierResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetOrgFromVizier not implemented")
 }
 
 func RegisterVZMgrServiceServer(s *grpc.Server, srv VZMgrServiceServer) {
@@ -2090,6 +2350,24 @@ func _VZMgrService_UpdateOrInstallVizier_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VZMgrService_GetOrgFromVizier_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(uuidpb.UUID)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VZMgrServiceServer).GetOrgFromVizier(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/px.services.internal.VZMgrService/GetOrgFromVizier",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VZMgrServiceServer).GetOrgFromVizier(ctx, req.(*uuidpb.UUID))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _VZMgrService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "px.services.internal.VZMgrService",
 	HandlerType: (*VZMgrServiceServer)(nil),
@@ -2130,6 +2408,10 @@ var _VZMgrService_serviceDesc = grpc.ServiceDesc{
 			MethodName: "UpdateOrInstallVizier",
 			Handler:    _VZMgrService_UpdateOrInstallVizier_Handler,
 		},
+		{
+			MethodName: "GetOrgFromVizier",
+			Handler:    _VZMgrService_GetOrgFromVizier_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "src/cloud/vzmgr/vzmgrpb/service.proto",
@@ -2142,7 +2424,7 @@ type VZDeploymentKeyServiceClient interface {
 	Create(ctx context.Context, in *CreateDeploymentKeyRequest, opts ...grpc.CallOption) (*DeploymentKey, error)
 	List(ctx context.Context, in *ListDeploymentKeyRequest, opts ...grpc.CallOption) (*ListDeploymentKeyResponse, error)
 	Get(ctx context.Context, in *GetDeploymentKeyRequest, opts ...grpc.CallOption) (*GetDeploymentKeyResponse, error)
-	Delete(ctx context.Context, in *uuidpb.UUID, opts ...grpc.CallOption) (*types.Empty, error)
+	Delete(ctx context.Context, in *DeleteDeploymentKeyRequest, opts ...grpc.CallOption) (*types.Empty, error)
 	LookupDeploymentKey(ctx context.Context, in *LookupDeploymentKeyRequest, opts ...grpc.CallOption) (*LookupDeploymentKeyResponse, error)
 }
 
@@ -2181,7 +2463,7 @@ func (c *vZDeploymentKeyServiceClient) Get(ctx context.Context, in *GetDeploymen
 	return out, nil
 }
 
-func (c *vZDeploymentKeyServiceClient) Delete(ctx context.Context, in *uuidpb.UUID, opts ...grpc.CallOption) (*types.Empty, error) {
+func (c *vZDeploymentKeyServiceClient) Delete(ctx context.Context, in *DeleteDeploymentKeyRequest, opts ...grpc.CallOption) (*types.Empty, error) {
 	out := new(types.Empty)
 	err := c.cc.Invoke(ctx, "/px.services.internal.VZDeploymentKeyService/Delete", in, out, opts...)
 	if err != nil {
@@ -2204,7 +2486,7 @@ type VZDeploymentKeyServiceServer interface {
 	Create(context.Context, *CreateDeploymentKeyRequest) (*DeploymentKey, error)
 	List(context.Context, *ListDeploymentKeyRequest) (*ListDeploymentKeyResponse, error)
 	Get(context.Context, *GetDeploymentKeyRequest) (*GetDeploymentKeyResponse, error)
-	Delete(context.Context, *uuidpb.UUID) (*types.Empty, error)
+	Delete(context.Context, *DeleteDeploymentKeyRequest) (*types.Empty, error)
 	LookupDeploymentKey(context.Context, *LookupDeploymentKeyRequest) (*LookupDeploymentKeyResponse, error)
 }
 
@@ -2221,7 +2503,7 @@ func (*UnimplementedVZDeploymentKeyServiceServer) List(ctx context.Context, req 
 func (*UnimplementedVZDeploymentKeyServiceServer) Get(ctx context.Context, req *GetDeploymentKeyRequest) (*GetDeploymentKeyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (*UnimplementedVZDeploymentKeyServiceServer) Delete(ctx context.Context, req *uuidpb.UUID) (*types.Empty, error) {
+func (*UnimplementedVZDeploymentKeyServiceServer) Delete(ctx context.Context, req *DeleteDeploymentKeyRequest) (*types.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
 func (*UnimplementedVZDeploymentKeyServiceServer) LookupDeploymentKey(ctx context.Context, req *LookupDeploymentKeyRequest) (*LookupDeploymentKeyResponse, error) {
@@ -2287,7 +2569,7 @@ func _VZDeploymentKeyService_Get_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _VZDeploymentKeyService_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(uuidpb.UUID)
+	in := new(DeleteDeploymentKeyRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -2299,7 +2581,7 @@ func _VZDeploymentKeyService_Delete_Handler(srv interface{}, ctx context.Context
 		FullMethod: "/px.services.internal.VZDeploymentKeyService/Delete",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VZDeploymentKeyServiceServer).Delete(ctx, req.(*uuidpb.UUID))
+		return srv.(VZDeploymentKeyServiceServer).Delete(ctx, req.(*DeleteDeploymentKeyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2887,6 +3169,30 @@ func (m *CreateDeploymentKeyRequest) MarshalToSizedBuffer(dAtA []byte) (int, err
 	_ = i
 	var l int
 	_ = l
+	if m.UserID != nil {
+		{
+			size, err := m.UserID.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintService(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.OrgID != nil {
+		{
+			size, err := m.OrgID.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintService(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
 	if len(m.Desc) > 0 {
 		i -= len(m.Desc)
 		copy(dAtA[i:], m.Desc)
@@ -2917,6 +3223,18 @@ func (m *ListDeploymentKeyRequest) MarshalToSizedBuffer(dAtA []byte) (int, error
 	_ = i
 	var l int
 	_ = l
+	if m.OrgID != nil {
+		{
+			size, err := m.OrgID.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintService(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
 	return len(dAtA) - i, nil
 }
 
@@ -2977,6 +3295,18 @@ func (m *GetDeploymentKeyRequest) MarshalToSizedBuffer(dAtA []byte) (int, error)
 	_ = i
 	var l int
 	_ = l
+	if m.OrgID != nil {
+		{
+			size, err := m.OrgID.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintService(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
 	if m.ID != nil {
 		{
 			size, err := m.ID.MarshalToSizedBuffer(dAtA[:i])
@@ -3015,6 +3345,53 @@ func (m *GetDeploymentKeyResponse) MarshalToSizedBuffer(dAtA []byte) (int, error
 	if m.Key != nil {
 		{
 			size, err := m.Key.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintService(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *DeleteDeploymentKeyRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *DeleteDeploymentKeyRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DeleteDeploymentKeyRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.OrgID != nil {
+		{
+			size, err := m.OrgID.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintService(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.ID != nil {
+		{
+			size, err := m.ID.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
@@ -3156,9 +3533,51 @@ func (m *RegisterVizierDeploymentResponse) MarshalToSizedBuffer(dAtA []byte) (in
 	_ = i
 	var l int
 	_ = l
+	if len(m.VizierName) > 0 {
+		i -= len(m.VizierName)
+		copy(dAtA[i:], m.VizierName)
+		i = encodeVarintService(dAtA, i, uint64(len(m.VizierName)))
+		i--
+		dAtA[i] = 0x12
+	}
 	if m.VizierID != nil {
 		{
 			size, err := m.VizierID.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintService(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetOrgFromVizierResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetOrgFromVizierResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetOrgFromVizierResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.OrgID != nil {
+		{
+			size, err := m.OrgID.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
@@ -3369,6 +3788,14 @@ func (m *CreateDeploymentKeyRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovService(uint64(l))
 	}
+	if m.OrgID != nil {
+		l = m.OrgID.Size()
+		n += 1 + l + sovService(uint64(l))
+	}
+	if m.UserID != nil {
+		l = m.UserID.Size()
+		n += 1 + l + sovService(uint64(l))
+	}
 	return n
 }
 
@@ -3378,6 +3805,10 @@ func (m *ListDeploymentKeyRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
+	if m.OrgID != nil {
+		l = m.OrgID.Size()
+		n += 1 + l + sovService(uint64(l))
+	}
 	return n
 }
 
@@ -3406,6 +3837,10 @@ func (m *GetDeploymentKeyRequest) Size() (n int) {
 		l = m.ID.Size()
 		n += 1 + l + sovService(uint64(l))
 	}
+	if m.OrgID != nil {
+		l = m.OrgID.Size()
+		n += 1 + l + sovService(uint64(l))
+	}
 	return n
 }
 
@@ -3417,6 +3852,23 @@ func (m *GetDeploymentKeyResponse) Size() (n int) {
 	_ = l
 	if m.Key != nil {
 		l = m.Key.Size()
+		n += 1 + l + sovService(uint64(l))
+	}
+	return n
+}
+
+func (m *DeleteDeploymentKeyRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.ID != nil {
+		l = m.ID.Size()
+		n += 1 + l + sovService(uint64(l))
+	}
+	if m.OrgID != nil {
+		l = m.OrgID.Size()
 		n += 1 + l + sovService(uint64(l))
 	}
 	return n
@@ -3477,6 +3929,23 @@ func (m *RegisterVizierDeploymentResponse) Size() (n int) {
 	_ = l
 	if m.VizierID != nil {
 		l = m.VizierID.Size()
+		n += 1 + l + sovService(uint64(l))
+	}
+	l = len(m.VizierName)
+	if l > 0 {
+		n += 1 + l + sovService(uint64(l))
+	}
+	return n
+}
+
+func (m *GetOrgFromVizierResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.OrgID != nil {
+		l = m.OrgID.Size()
 		n += 1 + l + sovService(uint64(l))
 	}
 	return n
@@ -3617,6 +4086,8 @@ func (this *CreateDeploymentKeyRequest) String() string {
 	}
 	s := strings.Join([]string{`&CreateDeploymentKeyRequest{`,
 		`Desc:` + fmt.Sprintf("%v", this.Desc) + `,`,
+		`OrgID:` + strings.Replace(fmt.Sprintf("%v", this.OrgID), "UUID", "uuidpb.UUID", 1) + `,`,
+		`UserID:` + strings.Replace(fmt.Sprintf("%v", this.UserID), "UUID", "uuidpb.UUID", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -3626,6 +4097,7 @@ func (this *ListDeploymentKeyRequest) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&ListDeploymentKeyRequest{`,
+		`OrgID:` + strings.Replace(fmt.Sprintf("%v", this.OrgID), "UUID", "uuidpb.UUID", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -3651,6 +4123,7 @@ func (this *GetDeploymentKeyRequest) String() string {
 	}
 	s := strings.Join([]string{`&GetDeploymentKeyRequest{`,
 		`ID:` + strings.Replace(fmt.Sprintf("%v", this.ID), "UUID", "uuidpb.UUID", 1) + `,`,
+		`OrgID:` + strings.Replace(fmt.Sprintf("%v", this.OrgID), "UUID", "uuidpb.UUID", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -3661,6 +4134,17 @@ func (this *GetDeploymentKeyResponse) String() string {
 	}
 	s := strings.Join([]string{`&GetDeploymentKeyResponse{`,
 		`Key:` + strings.Replace(this.Key.String(), "DeploymentKey", "DeploymentKey", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *DeleteDeploymentKeyRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&DeleteDeploymentKeyRequest{`,
+		`ID:` + strings.Replace(fmt.Sprintf("%v", this.ID), "UUID", "uuidpb.UUID", 1) + `,`,
+		`OrgID:` + strings.Replace(fmt.Sprintf("%v", this.OrgID), "UUID", "uuidpb.UUID", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -3703,6 +4187,17 @@ func (this *RegisterVizierDeploymentResponse) String() string {
 	}
 	s := strings.Join([]string{`&RegisterVizierDeploymentResponse{`,
 		`VizierID:` + strings.Replace(fmt.Sprintf("%v", this.VizierID), "UUID", "uuidpb.UUID", 1) + `,`,
+		`VizierName:` + fmt.Sprintf("%v", this.VizierName) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetOrgFromVizierResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetOrgFromVizierResponse{`,
+		`OrgID:` + strings.Replace(fmt.Sprintf("%v", this.OrgID), "UUID", "uuidpb.UUID", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4982,6 +5477,78 @@ func (m *CreateDeploymentKeyRequest) Unmarshal(dAtA []byte) error {
 			}
 			m.Desc = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgID", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowService
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthService
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthService
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.OrgID == nil {
+				m.OrgID = &uuidpb.UUID{}
+			}
+			if err := m.OrgID.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UserID", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowService
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthService
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthService
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.UserID == nil {
+				m.UserID = &uuidpb.UUID{}
+			}
+			if err := m.UserID.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipService(dAtA[iNdEx:])
@@ -5032,6 +5599,42 @@ func (m *ListDeploymentKeyRequest) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: ListDeploymentKeyRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgID", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowService
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthService
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthService
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.OrgID == nil {
+				m.OrgID = &uuidpb.UUID{}
+			}
+			if err := m.OrgID.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipService(dAtA[iNdEx:])
@@ -5202,6 +5805,42 @@ func (m *GetDeploymentKeyRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgID", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowService
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthService
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthService
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.OrgID == nil {
+				m.OrgID = &uuidpb.UUID{}
+			}
+			if err := m.OrgID.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipService(dAtA[iNdEx:])
@@ -5285,6 +5924,128 @@ func (m *GetDeploymentKeyResponse) Unmarshal(dAtA []byte) error {
 				m.Key = &DeploymentKey{}
 			}
 			if err := m.Key.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipService(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthService
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DeleteDeploymentKeyRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowService
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DeleteDeploymentKeyRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DeleteDeploymentKeyRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowService
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthService
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthService
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ID == nil {
+				m.ID = &uuidpb.UUID{}
+			}
+			if err := m.ID.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgID", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowService
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthService
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthService
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.OrgID == nil {
+				m.OrgID = &uuidpb.UUID{}
+			}
+			if err := m.OrgID.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -5685,6 +6446,124 @@ func (m *RegisterVizierDeploymentResponse) Unmarshal(dAtA []byte) error {
 				m.VizierID = &uuidpb.UUID{}
 			}
 			if err := m.VizierID.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VizierName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowService
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthService
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthService
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.VizierName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipService(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthService
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetOrgFromVizierResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowService
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetOrgFromVizierResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetOrgFromVizierResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrgID", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowService
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthService
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthService
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.OrgID == nil {
+				m.OrgID = &uuidpb.UUID{}
+			}
+			if err := m.OrgID.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

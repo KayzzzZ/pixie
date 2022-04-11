@@ -40,7 +40,8 @@ class TestQLObject : public QLObject {
       /* type */ QLObjectType::kMisc,
   };
 
-  explicit TestQLObject(ASTVisitor* visitor) : QLObject(TestQLObjectType, visitor) {
+  TestQLObject(const pypa::AstPtr& ast, ASTVisitor* visitor)
+      : QLObject(TestQLObjectType, ast, visitor) {
     std::shared_ptr<FuncObject> func_obj =
         FuncObject::Create("func", {}, {}, /* has_variable_len_args */ false,
                            /* has_variable_len_kwargs */ false,
@@ -51,21 +52,21 @@ class TestQLObject : public QLObject {
     AddMethod("func", func_obj);
   }
 
-  StatusOr<QLObjectPtr> SimpleFunc(const pypa::AstPtr&, const ParsedArgs&, ASTVisitor* visitor) {
-    auto out_obj = std::make_shared<TestQLObject>(visitor);
+  StatusOr<QLObjectPtr> SimpleFunc(const pypa::AstPtr& ast, const ParsedArgs&,
+                                   ASTVisitor* visitor) {
+    auto out_obj = std::make_shared<TestQLObject>(ast, visitor);
     return StatusOr<QLObjectPtr>(out_obj);
   }
 };
 
 TEST_F(QLObjectTest, GetMethod) {
-  auto test_object = std::make_shared<TestQLObject>(ast_visitor.get());
+  auto test_object = std::make_shared<TestQLObject>(ast, ast_visitor.get());
   // No attributes in the TestQLObject, so should return the method
   EXPECT_TRUE(test_object->HasMethod("func"));
   auto attr_or_s = test_object->GetMethod("func");
   ASSERT_OK(attr_or_s);
   auto func_attr = attr_or_s.ConsumeValueOrDie();
   ASSERT_TRUE(func_attr->type_descriptor().type() == QLObjectType::kFunction);
-  EXPECT_FALSE(func_attr->HasNode());
 
   auto out_object = func_attr->Call(ArgMap{}, ast).ConsumeValueOrDie();
   // Just validate that the correct thing happened.
@@ -75,14 +76,13 @@ TEST_F(QLObjectTest, GetMethod) {
 
 // Gets the method via an attribute.
 TEST_F(QLObjectTest, GetMethodAsAttribute) {
-  auto test_object = std::make_shared<TestQLObject>(ast_visitor.get());
+  auto test_object = std::make_shared<TestQLObject>(ast, ast_visitor.get());
   // No attributes in the TestQLObject, so should return the method
   EXPECT_TRUE(test_object->HasAttribute("func"));
   auto attr_or_s = test_object->GetAttribute(ast, "func");
   ASSERT_OK(attr_or_s);
   auto func_attr = attr_or_s.ConsumeValueOrDie();
   ASSERT_TRUE(func_attr->type_descriptor().type() == QLObjectType::kFunction);
-  EXPECT_FALSE(func_attr->HasNode());
 
   auto func = static_cast<FuncObject*>(func_attr.get());
   auto out_object = func->Call(ArgMap{}, ast).ConsumeValueOrDie();
@@ -93,7 +93,7 @@ TEST_F(QLObjectTest, GetMethodAsAttribute) {
 
 // Attribute not found in either impl or the methods.
 TEST_F(QLObjectTest, AttributeNotFound) {
-  auto test_object = std::make_shared<TestQLObject>(ast_visitor.get());
+  auto test_object = std::make_shared<TestQLObject>(ast, ast_visitor.get());
   // No attributes in the TestQLObject, so should return the method
   std::string attr_name = "bar";
   auto attr_or_s = test_object->GetAttribute(ast, attr_name);
@@ -105,34 +105,32 @@ TEST_F(QLObjectTest, AttributeNotFound) {
 
 // Method not found.
 TEST_F(QLObjectTest, MethodNotFound) {
-  auto test_object = std::make_shared<TestQLObject>(ast_visitor.get());
+  auto test_object = std::make_shared<TestQLObject>(ast, ast_visitor.get());
   // No attributes in the TestQLObject, so should return the method
   std::string attr_name = "bar";
   auto attr_or_s = test_object->GetMethod(attr_name);
   ASSERT_NOT_OK(attr_or_s);
-  EXPECT_THAT(attr_or_s.status().msg(),
-              ContainsRegex(absl::Substitute("'$0'.* has no attribute .*$1",
-                                             test_object->type_descriptor().name(), attr_name)));
+  EXPECT_THAT(attr_or_s.status(),
+              HasCompilerError("'$0'.* has no attribute .*$1",
+                               test_object->type_descriptor().name(), attr_name));
 }
 
 TEST_F(QLObjectTest, NotSubscriptable) {
-  auto test_object = std::make_shared<TestQLObject>(ast_visitor.get());
+  auto test_object = std::make_shared<TestQLObject>(ast, ast_visitor.get());
   // No attributes in the TestQLObject, so should return the method
   auto attr_or_s = test_object->GetSubscriptMethod();
   ASSERT_NOT_OK(attr_or_s);
-  EXPECT_THAT(attr_or_s.status().msg(),
-              ContainsRegex(absl::Substitute("'$0'.* is not subscriptable",
-                                             test_object->type_descriptor().name())));
+  EXPECT_THAT(attr_or_s.status(), HasCompilerError("'$0'.* is not subscriptable",
+                                                   test_object->type_descriptor().name()));
 }
 
 TEST_F(QLObjectTest, NotCallable) {
-  auto test_object = std::make_shared<TestQLObject>(ast_visitor.get());
+  auto test_object = std::make_shared<TestQLObject>(ast, ast_visitor.get());
   // No attributes in the TestQLObject, so should return the method
   auto attr_or_s = test_object->GetCallMethod();
   ASSERT_NOT_OK(attr_or_s);
-  EXPECT_THAT(attr_or_s.status().msg(),
-              ContainsRegex(absl::Substitute("'$0'.* is not callable",
-                                             test_object->type_descriptor().name())));
+  EXPECT_THAT(attr_or_s.status(),
+              HasCompilerError("'$0'.* is not callable", test_object->type_descriptor().name()));
 }
 
 class TestQLObject2 : public QLObject {
@@ -186,7 +184,6 @@ TEST_F(QLObjectTest, GetSubscriptMethod) {
   ASSERT_OK(attr_or_s);
   auto func_attr = attr_or_s.ConsumeValueOrDie();
   ASSERT_TRUE(func_attr->type_descriptor().type() == QLObjectType::kFunction);
-  EXPECT_FALSE(func_attr->HasNode());
 
   auto out_object = func_attr->Call(MakeArgMap({}, {MakeInt(10)}), ast).ConsumeValueOrDie();
   // just validate that the correct thing happened.
@@ -202,7 +199,6 @@ TEST_F(QLObjectTest, GetCallMethod) {
   ASSERT_OK(attr_or_s);
   auto func_attr = attr_or_s.ConsumeValueOrDie();
   ASSERT_TRUE(func_attr->type_descriptor().type() == QLObjectType::kFunction);
-  EXPECT_FALSE(func_attr->HasNode());
 
   auto out_object = func_attr->Call(MakeArgMap({}, {MakeInt(10)}), ast).ConsumeValueOrDie();
   // just validate that the correct thing happened.

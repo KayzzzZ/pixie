@@ -70,8 +70,14 @@ struct Go1_17GRPCClientServerContainers {
   using ClientContainer = ::px::stirling::testing::Go1_17_GRPCClientContainer;
 };
 
-// Use a typed test to run the test for both Go 1.16 and Go 1.17.
-typedef ::testing::Types<Go1_16GRPCClientServerContainers, Go1_17GRPCClientServerContainers>
+struct Go1_18GRPCClientServerContainers {
+  using ServerContainer = ::px::stirling::testing::Go1_18_GRPCServerContainer;
+  using ClientContainer = ::px::stirling::testing::Go1_18_GRPCClientContainer;
+};
+
+// Use a typed test to run the test for Go 1.16 - Go 1.18.
+typedef ::testing::Types<Go1_16GRPCClientServerContainers, Go1_17GRPCClientServerContainers,
+                         Go1_18GRPCClientServerContainers>
     GoVersions;
 TYPED_TEST_SUITE(HTTP2TraceTest, GoVersions);
 
@@ -90,8 +96,7 @@ TYPED_TEST(HTTP2TraceTest, Basic) {
     // Grab the data from Stirling.
     std::vector<TaggedRecordBatch> tablets =
         this->ConsumeRecords(SocketTraceConnector::kHTTPTableNum);
-    ASSERT_FALSE(tablets.empty());
-    types::ColumnWrapperRecordBatch rb = tablets[0].records;
+    ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& rb, tablets);
 
     const std::vector<size_t> target_record_indices =
         FindRecordIdxMatchesPID(rb, kHTTPUPIDIdx, this->server_.process_pid());
@@ -158,8 +163,7 @@ TEST_F(ProductCatalogServiceTraceTest, Basic) {
 
   // Grab the data from Stirling.
   std::vector<TaggedRecordBatch> tablets = ConsumeRecords(SocketTraceConnector::kHTTPTableNum);
-  ASSERT_FALSE(tablets.empty());
-  const types::ColumnWrapperRecordBatch& rb = tablets[0].records;
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& rb, tablets);
 
   const std::vector<size_t> target_record_indices =
       FindRecordIdxMatchesPID(rb, kHTTPUPIDIdx, server_.process_pid());

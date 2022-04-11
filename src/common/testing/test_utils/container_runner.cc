@@ -74,7 +74,7 @@ StatusOr<std::string> ContainerStatus(std::string_view container_name) {
 
 StatusOr<int> ContainerPID(std::string_view container_name) {
   PL_ASSIGN_OR_RETURN(
-      std::string pid_str,
+      const std::string pid_str,
       px::Exec(absl::Substitute("docker inspect -f '{{.State.Pid}}' $0", container_name)));
 
   int pid;
@@ -92,7 +92,8 @@ StatusOr<int> ContainerPID(std::string_view container_name) {
 
 StatusOr<std::string> ContainerRunner::Run(const std::chrono::seconds& timeout,
                                            const std::vector<std::string>& options,
-                                           const std::vector<std::string>& args) {
+                                           const std::vector<std::string>& args,
+                                           const bool use_host_pid_namespace) {
   // Now run the container.
   // Run with timeout, as a backup in case we don't clean things up properly.
   container_name_ = absl::StrCat(instance_name_prefix_, "_",
@@ -104,7 +105,9 @@ StatusOr<std::string> ContainerRunner::Run(const std::chrono::seconds& timeout,
   std::vector<std::string> docker_run_cmd;
   docker_run_cmd.push_back("docker");
   docker_run_cmd.push_back("run");
-  docker_run_cmd.push_back("--pid=host");
+  if (use_host_pid_namespace) {
+    docker_run_cmd.push_back("--pid=host");
+  }
   for (const auto& flag : options) {
     docker_run_cmd.push_back(flag);
   }
@@ -116,7 +119,7 @@ StatusOr<std::string> ContainerRunner::Run(const std::chrono::seconds& timeout,
   }
 
   LOG(INFO) << docker_run_cmd;
-  PL_RETURN_IF_ERROR(container_.Start(docker_run_cmd, /* stderr_to_stdout */ true));
+  PL_RETURN_IF_ERROR(docker_.Start(docker_run_cmd, /* stderr_to_stdout */ true));
 
   // If the process receives a SIGKILL, then the docker run command above would leak.
   // As a safety net for such cases, we spawn off a delayed docker kill command to clean-up.
@@ -137,7 +140,15 @@ StatusOr<std::string> ContainerRunner::Run(const std::chrono::seconds& timeout,
   for (; attempts_remaining > 0; --attempts_remaining) {
     // We check if the container process is running before running docker inspect
     // to avoid races where the container stops running after the docker inspect.
-    bool container_is_running = container_.IsRunning();
+    const bool docker_is_running = docker_.IsRunning();
+
+    if (!docker_is_running) {
+      // If docker is not running, fail early to save time.
+      std::string container_out;
+      PL_RETURN_IF_ERROR(docker_.Stdout(&container_out));
+      return error::Internal("Container $0 docker run failed. Output:\n$1", container_name_,
+                             container_out);
+    }
 
     PL_ASSIGN_OR_RETURN(container_status, ContainerStatus(container_name_));
     LOG(INFO) << absl::Substitute("Container $0 status: $1", container_name_, container_status);
@@ -153,20 +164,12 @@ StatusOr<std::string> ContainerRunner::Run(const std::chrono::seconds& timeout,
         "Container $0 not yet running, will try again ($1 attempts remaining).", container_name_,
         attempts_remaining);
 
-    if (!container_is_running) {
-      // If container is not running, fail early to save time.
-      std::string container_out;
-      PL_RETURN_IF_ERROR(container_.Stdout(&container_out));
-      return error::Internal("Container $0 docker run failed. Output:\n$1", container_name_,
-                             container_out);
-    }
-
     sleep(kSleepSeconds);
   }
 
   if (container_status != "running" && container_status != "exited") {
     std::string container_out;
-    PL_RETURN_IF_ERROR(container_.Stdout(&container_out));
+    PL_RETURN_IF_ERROR(docker_.Stdout(&container_out));
     return error::Internal("Container $0 failed to start. Container output:\n$1", container_name_,
                            container_out);
   }
@@ -191,7 +194,7 @@ StatusOr<std::string> ContainerRunner::Run(const std::chrono::seconds& timeout,
     // Otherwise it is possible we don't see the container become ready,
     // but we do see its status as "exited", and we think it exited without ever becoming ready.
     PL_ASSIGN_OR_RETURN(container_status, ContainerStatus(container_name_));
-    PL_RETURN_IF_ERROR(container_.Stdout(&container_out));
+    PL_RETURN_IF_ERROR(docker_.Stdout(&container_out));
 
     LOG(INFO) << absl::Substitute("Container $0 status: $1", container_name_, container_status);
 
@@ -235,10 +238,10 @@ StatusOr<std::string> ContainerRunner::Run(const std::chrono::seconds& timeout,
 
 void ContainerRunner::Stop() {
   // Clean-up the container.
-  container_.Signal(SIGKILL);
-  container_.Wait();
+  docker_.Signal(SIGKILL);
+  docker_.Wait();
 }
 
-void ContainerRunner::Wait() { container_.Wait(); }
+void ContainerRunner::Wait() { docker_.Wait(); }
 
 }  // namespace px

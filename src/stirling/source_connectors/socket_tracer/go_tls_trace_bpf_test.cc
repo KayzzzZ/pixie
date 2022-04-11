@@ -69,7 +69,13 @@ struct Go1_17TLSClientServerContainers {
   using GoTLSClientContainer = ::px::stirling::testing::Go1_17_TLSClientContainer;
 };
 
-typedef ::testing::Types<Go1_16TLSClientServerContainers, Go1_17TLSClientServerContainers>
+struct Go1_18TLSClientServerContainers {
+  using GoTLSServerContainer = ::px::stirling::testing::Go1_18_TLSServerContainer;
+  using GoTLSClientContainer = ::px::stirling::testing::Go1_18_TLSClientContainer;
+};
+
+typedef ::testing::Types<Go1_16TLSClientServerContainers, Go1_17TLSClientServerContainers,
+                         Go1_18TLSClientServerContainers>
     GoVersions;
 TYPED_TEST_SUITE(GoTLSTraceTest, GoVersions);
 
@@ -77,13 +83,14 @@ TYPED_TEST_SUITE(GoTLSTraceTest, GoVersions);
 // Result Checking: Helper Functions and Matchers
 //-----------------------------------------------------------------------------
 
-TYPED_TEST(GoTLSTraceTest, Basic) {
+TYPED_TEST(GoTLSTraceTest, BasicHTTP) {
   this->StartTransferDataThread();
 
   // Run the client in the network of the server, so they can connect to each other.
   PL_CHECK_OK(this->client_.Run(
       std::chrono::seconds{10},
-      {absl::Substitute("--network=container:$0", this->server_.container_name())}));
+      {absl::Substitute("--network=container:$0", this->server_.container_name())},
+      {"--http2=false"}));
   this->client_.Wait();
 
   this->StopTransferDataThread();
@@ -91,8 +98,43 @@ TYPED_TEST(GoTLSTraceTest, Basic) {
   // Grab the data from Stirling.
   std::vector<TaggedRecordBatch> tablets =
       this->ConsumeRecords(SocketTraceConnector::kHTTPTableNum);
-  ASSERT_FALSE(tablets.empty());
-  types::ColumnWrapperRecordBatch record_batch = tablets[0].records;
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& record_batch, tablets);
+
+  {
+    const std::vector<size_t> target_record_indices =
+        FindRecordIdxMatchesPID(record_batch, kHTTPUPIDIdx, this->server_.process_pid());
+
+    std::vector<http::Record> records = ToRecordVector(record_batch, target_record_indices);
+
+    // TODO(oazizi): Add headers checking too.
+    http::Record expected_record = {};
+    expected_record.req.req_path = "/";
+    expected_record.req.req_method = "GET";
+    expected_record.req.body = R"()";
+    expected_record.resp.resp_status = 200;
+    expected_record.resp.resp_message = "OK";
+    expected_record.resp.body = R"({"status":"ok"})";
+
+    EXPECT_THAT(records, Contains(EqHTTPRecord(expected_record)));
+  }
+}
+
+TYPED_TEST(GoTLSTraceTest, BasicHTTP2) {
+  this->StartTransferDataThread();
+
+  // Run the client in the network of the server, so they can connect to each other.
+  PL_CHECK_OK(this->client_.Run(
+      std::chrono::seconds{10},
+      {absl::Substitute("--network=container:$0", this->server_.container_name())},
+      {"--http2=true"}));
+  this->client_.Wait();
+
+  this->StopTransferDataThread();
+
+  // Grab the data from Stirling.
+  std::vector<TaggedRecordBatch> tablets =
+      this->ConsumeRecords(SocketTraceConnector::kHTTPTableNum);
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& record_batch, tablets);
 
   {
     const std::vector<size_t> target_record_indices =

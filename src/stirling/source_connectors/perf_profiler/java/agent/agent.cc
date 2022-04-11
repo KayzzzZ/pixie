@@ -34,6 +34,15 @@
 // NOLINTNEXTLINE: build/include_subdir
 #include "raw_symbol_update.h"
 
+// NOLINTNEXTLINE: build/include_subdir
+#include "agent_hash.h"
+
+#define PX_JVMTI_AGENT_RETURN_IF_ERROR(err)                                                    \
+  if (err != JNI_OK) {                                                                         \
+    LogF("Pixie symbolization agent startup sequence failed, %s, error code: %d.", #err, err); \
+    return err;                                                                                \
+  }
+
 namespace {
 constexpr bool kUsingTxtLogFile = false;
 constexpr bool kUsingBinLogFile = true;
@@ -244,6 +253,7 @@ jint AddJVMTICapabilities(jvmtiEnv* jvmti) {
 jint SetCallbackFunctions(jvmtiEnv* jvmti) {
   jvmtiError error;
   jvmtiEventCallbacks callbacks;
+
   memset(&callbacks, 0, sizeof(jvmtiEventCallbacks));
 
   callbacks.CompiledMethodLoad = &CompiledMethodLoad;
@@ -264,6 +274,11 @@ jint ReplayCallbacks(jvmtiEnv* jvmti) {
   jvmtiPhase phase;
 
   error = jvmti->GetPhase(&phase);
+  if (error != JVMTI_ERROR_NONE) {
+    LogJvmtiError(jvmti, error, "ReplayCallbacks(): GetPhase() error.");
+    return JNI_ERR;
+  }
+
   if (phase != JVMTI_PHASE_LIVE) {
     LogF("Skipping ReplayCallbacks(), not in live phase.");
     return JNI_OK;
@@ -285,6 +300,36 @@ jint ReplayCallbacks(jvmtiEnv* jvmti) {
   return JNI_OK;
 }
 
+jint CheckForOnLoadOrLivePhase(jvmtiEnv* jvmti) {
+  jvmtiError error;
+  jvmtiPhase phase;
+
+  error = jvmti->GetPhase(&phase);
+  if (error != JVMTI_ERROR_NONE) {
+    LogJvmtiError(jvmti, error, "CheckForOnLoadOrLivePhase(): GetPhase() error.");
+    return JNI_ERR;
+  }
+
+  // We need to be in either the "live" or "on load" phase because all of
+  // our JVMTI methods (except GenerateEvents) require one of these two phases.
+  // If in the "on load" phase, we will later skip GenerateEvents.
+  // https://docs.oracle.com/en/java/javase/17/docs/specs/jvmti.html#GetPhase
+  // TODO(jps): is it possible to trigger Agent_OnLoad or Agent_OnAttach *not* in live or on load?
+  const bool in_live_phase = phase == JVMTI_PHASE_LIVE;
+  const bool in_load_phase = phase == JVMTI_PHASE_ONLOAD;
+  const bool phase_ok = in_live_phase || in_load_phase;
+
+  if (!phase_ok) {
+    // Not in live or on load phase. Bail now. Returning JNI_ERR causes the startup sequence
+    // to fall through, i.e. skips the remaining steps in the agent startup sequence.
+    LogF("CheckForOnLoadOrLivePhase(): Not in live or on load phase.");
+    return JNI_ERR;
+  }
+
+  // We are either in "live" or "on load" phase. Keep calm and carry on.
+  return JNI_OK;
+}
+
 FILE* FOpenLogFile(const std::string& file_path) {
   FILE* f = fopen(file_path.c_str(), "w");
   if (f == nullptr) {
@@ -299,6 +344,8 @@ jint OpenLogFiles(const char* options) {
   }
 
   std::string artifacts_path(options);
+  artifacts_path += std::string("-") + std::string(PX_JVMTI_AGENT_HASH);
+
   g_log_file_ptr = nullptr;
   g_bin_file_ptr = nullptr;
 
@@ -327,9 +374,9 @@ jint GetJVMTIEnv(JavaVM* jvm, jvmtiEnv** jvmti) {
   jint error = jvm->GetEnv(reinterpret_cast<void**>(jvmti), JVMTI_VERSION_1_0);
   if (error != JNI_OK || *jvmti == nullptr) {
     LogF("[error] Unable to access JVMTI.");
-    error = JNI_ERR;
+    return JNI_ERR;
   }
-  return error;
+  return JNI_OK;
 }
 
 extern "C" {
@@ -342,25 +389,21 @@ JNIEXPORT uint64_t PixieJavaAgentTestFn() {
 
 JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM* jvm, char* options, void* /*reserved*/) {
   if (g_callbacks_attached) {
-    LogF("Agent_OnAttach().");
-    LogF("pem restart detected, skipping callback attach.");
-    LogF("return JNI_OK.");
+    LogF("Agent_OnAttach(). g_callbacks_attached=true, skipping agent startup sequence.");
     return JNI_OK;
   }
 
-  jint error = JNI_OK;
   static jvmtiEnv* jvmti = nullptr;
 
-  error = error == JNI_OK ? OpenLogFiles(options) : error;
-  error = error == JNI_OK ? GetJVMTIEnv(jvm, &jvmti) : error;
-  error = error == JNI_OK ? AddJVMTICapabilities(jvmti) : error;
-  error = error == JNI_OK ? SetNotificationModes(jvmti) : error;
-  error = error == JNI_OK ? SetCallbackFunctions(jvmti) : error;
-  error = error == JNI_OK ? ReplayCallbacks(jvmti) : error;
+  PX_JVMTI_AGENT_RETURN_IF_ERROR(OpenLogFiles(options));
+  PX_JVMTI_AGENT_RETURN_IF_ERROR(GetJVMTIEnv(jvm, &jvmti));
+  PX_JVMTI_AGENT_RETURN_IF_ERROR(AddJVMTICapabilities(jvmti));
+  PX_JVMTI_AGENT_RETURN_IF_ERROR(SetNotificationModes(jvmti));
+  PX_JVMTI_AGENT_RETURN_IF_ERROR(SetCallbackFunctions(jvmti));
+  PX_JVMTI_AGENT_RETURN_IF_ERROR(ReplayCallbacks(jvmti));
 
-  const char* const return_msg = error == JNI_OK ? "return JNI_OK." : "return JNI_ERR.";
-  LogF(return_msg);
-  return error;
+  LogF("Pixie JVMTI symbolization agent startup sequence complete.");
+  return JNI_OK;
 }
 
 JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM* jvm, char* options, void* /*reserved*/) {

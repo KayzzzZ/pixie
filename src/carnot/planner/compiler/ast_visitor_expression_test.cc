@@ -64,8 +64,11 @@ class ASTExpressionTest : public ::testing::Test {
     udfspb::UDFInfo info_pb;
     google::protobuf::TextFormat::MergeFromString(kRegInfoProto, &info_pb);
     PL_CHECK_OK(info_->Init(info_pb));
-    compiler_state_ = std::make_shared<CompilerState>(std::make_unique<RelationMap>(), info_.get(),
-                                                      time_now_, "result_addr");
+    compiler_state_ = std::make_unique<CompilerState>(
+        std::make_unique<RelationMap>(), /* sensitive_columns */ SensitiveColumnMap{}, info_.get(),
+        /* time_now */ time_now_,
+        /* max_output_rows_per_table */ 0, "result_addr", "result_ssl_targetname",
+        /* redaction_options */ RedactionOptions{}, nullptr, nullptr);
     graph = std::make_shared<IR>();
 
     auto ast_visitor_impl = ASTVisitorImpl::Create(graph.get(), &dynamic_trace_,
@@ -79,7 +82,7 @@ class ASTExpressionTest : public ::testing::Test {
   std::shared_ptr<IR> graph;
   std::shared_ptr<ASTVisitor> ast_visitor;
 
-  std::shared_ptr<CompilerState> compiler_state_;
+  std::unique_ptr<CompilerState> compiler_state_;
   int64_t time_now_ = 1552607213931245000;
   ModuleHandler module_handler_;
   MutationsIR dynamic_trace_;
@@ -92,9 +95,11 @@ TEST_F(ASTExpressionTest, String) {
   ASSERT_OK(visitor_result);
 
   auto obj = visitor_result.ConsumeValueOrDie();
-  ASSERT_TRUE(obj->HasNode());
-  ASSERT_MATCH(obj->node(), String());
-  EXPECT_EQ(static_cast<StringIR*>(obj->node())->str(), "value");
+  ASSERT_TRUE(ExprObject::IsExprObject(obj));
+  auto expr = static_cast<ExprObject*>(obj.get())->expr();
+
+  ASSERT_MATCH(expr, String());
+  EXPECT_EQ(static_cast<StringIR*>(expr)->str(), "value");
 }
 
 TEST_F(ASTExpressionTest, Integer) {
@@ -105,9 +110,11 @@ TEST_F(ASTExpressionTest, Integer) {
   ASSERT_OK(visitor_result);
 
   auto obj = visitor_result.ConsumeValueOrDie();
-  ASSERT_TRUE(obj->HasNode());
-  ASSERT_MATCH(obj->node(), Int());
-  EXPECT_EQ(static_cast<IntIR*>(obj->node())->val(), 1);
+  ASSERT_TRUE(ExprObject::IsExprObject(obj));
+  auto expr = static_cast<ExprObject*>(obj.get())->expr();
+
+  ASSERT_MATCH(expr, Int());
+  EXPECT_EQ(static_cast<IntIR*>(expr)->val(), 1);
 }
 
 TEST_F(ASTExpressionTest, PLModule) {
@@ -118,7 +125,6 @@ TEST_F(ASTExpressionTest, PLModule) {
   ASSERT_OK(visitor_result);
 
   auto obj = visitor_result.ConsumeValueOrDie();
-  ASSERT_FALSE(obj->HasNode());
   EXPECT_EQ(QLObjectType::kFunction, obj->type());
   EXPECT_EQ(std::static_pointer_cast<FuncObject>(obj)->name(), "mean");
 }

@@ -44,7 +44,7 @@ pl_cc_library(
 
 pl_cc_test_library(
     name = "test_utils",
-    hdrs = glob(["test_utils.h"]),
+    hdrs = ["test_utils.h"],
     deps = [
         ":cc_library",
         "//src/carnot/planner/compiler:cc_library",
@@ -64,6 +64,24 @@ pl_cc_test(
 pl_cc_test(
     name = "funcobject_test",
     srcs = ["funcobject_test.cc"],
+    deps = [
+        ":cc_library",
+        ":test_utils",
+    ],
+)
+
+pl_cc_test(
+    name = "exporter_test",
+    srcs = ["exporter_test.cc"],
+    deps = [
+        ":cc_library",
+        ":test_utils",
+    ],
+)
+
+pl_cc_test(
+    name = "otel_test",
+    srcs = ["otel_test.cc"],
     deps = [
         ":cc_library",
         ":test_utils",
@@ -154,6 +172,15 @@ pl_cc_test(
 pl_cc_test(
     name = "var_table_test",
     srcs = ["var_table_test.cc"],
+    deps = [
+        ":cc_library",
+        ":test_utils",
+    ],
+)
+
+pl_cc_test(
+    name = "plugin_module_test",
+    srcs = ["plugin_test.cc"],
     deps = [
         ":cc_library",
         ":test_utils",

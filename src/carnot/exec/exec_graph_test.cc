@@ -75,7 +75,8 @@ class BaseExecGraphTest : public ::testing::Test {
 
     auto table_store = std::make_shared<table_store::TableStore>();
     exec_state_ = std::make_unique<ExecState>(func_registry_.get(), table_store,
-                                              MockResultSinkStubGenerator, sole::uuid4(), nullptr);
+                                              MockResultSinkStubGenerator, MockMetricsStubGenerator,
+                                              MockTraceStubGenerator, sole::uuid4(), nullptr);
   }
 
   std::unique_ptr<udf::Registry> func_registry_;
@@ -172,7 +173,8 @@ TEST_P(ExecGraphExecuteTest, execute) {
   auto table_store = std::make_shared<table_store::TableStore>();
   table_store->AddTable("numbers", table);
   auto exec_state_ = std::make_unique<ExecState>(
-      func_registry_.get(), table_store, MockResultSinkStubGenerator, sole::uuid4(), nullptr);
+      func_registry_.get(), table_store, MockResultSinkStubGenerator, MockMetricsStubGenerator,
+      MockTraceStubGenerator, sole::uuid4(), nullptr);
 
   EXPECT_OK(exec_state_->AddScalarUDF(
       0, "add", std::vector<types::DataType>({types::DataType::INT64, types::DataType::FLOAT64})));
@@ -259,7 +261,8 @@ TEST_F(ExecGraphTest, execute_time) {
   table_store->AddTable("numbers", table);
 
   auto exec_state_ = std::make_unique<ExecState>(
-      func_registry.get(), table_store, MockResultSinkStubGenerator, sole::uuid4(), nullptr);
+      func_registry.get(), table_store, MockResultSinkStubGenerator, MockMetricsStubGenerator,
+      MockTraceStubGenerator, sole::uuid4(), nullptr);
 
   EXPECT_OK(exec_state_->AddScalarUDF(
       0, "add", std::vector<types::DataType>({types::DataType::INT64, types::DataType::FLOAT64})));
@@ -332,7 +335,8 @@ TEST_F(ExecGraphTest, two_limits_dont_interfere) {
   auto table_store = std::make_shared<table_store::TableStore>();
   table_store->AddTable("numbers", table);
   auto exec_state_ = std::make_unique<ExecState>(
-      func_registry_.get(), table_store, MockResultSinkStubGenerator, sole::uuid4(), nullptr);
+      func_registry_.get(), table_store, MockResultSinkStubGenerator, MockMetricsStubGenerator,
+      MockTraceStubGenerator, sole::uuid4(), nullptr);
 
   ExecutionGraph e;
   auto s = e.Init(schema.get(), plan_state.get(), exec_state_.get(), plan_fragment_.get(),
@@ -404,7 +408,8 @@ TEST_F(ExecGraphTest, limit_w_multiple_srcs) {
   auto table_store = std::make_shared<table_store::TableStore>();
   table_store->AddTable("numbers", table);
   auto exec_state_ = std::make_unique<ExecState>(
-      func_registry_.get(), table_store, MockResultSinkStubGenerator, sole::uuid4(), nullptr);
+      func_registry_.get(), table_store, MockResultSinkStubGenerator, MockMetricsStubGenerator,
+      MockTraceStubGenerator, sole::uuid4(), nullptr);
 
   ExecutionGraph e;
   auto s = e.Init(schema.get(), plan_state.get(), exec_state_.get(), plan_fragment_.get(),
@@ -467,7 +472,8 @@ TEST_F(ExecGraphTest, two_sequential_limits) {
   auto table_store = std::make_shared<table_store::TableStore>();
   table_store->AddTable("numbers", table);
   auto exec_state_ = std::make_unique<ExecState>(
-      func_registry_.get(), table_store, MockResultSinkStubGenerator, sole::uuid4(), nullptr);
+      func_registry_.get(), table_store, MockResultSinkStubGenerator, MockMetricsStubGenerator,
+      MockTraceStubGenerator, sole::uuid4(), nullptr);
 
   ExecutionGraph e;
   auto s = e.Init(schema.get(), plan_state.get(), exec_state_.get(), plan_fragment_.get(),
@@ -531,7 +537,8 @@ TEST_F(ExecGraphTest, execute_with_two_limits) {
   auto table_store = std::make_shared<table_store::TableStore>();
   table_store->AddTable("numbers", table);
   auto exec_state_ = std::make_unique<ExecState>(
-      func_registry_.get(), table_store, MockResultSinkStubGenerator, sole::uuid4(), nullptr);
+      func_registry_.get(), table_store, MockResultSinkStubGenerator, MockMetricsStubGenerator,
+      MockTraceStubGenerator, sole::uuid4(), nullptr);
 
   ExecutionGraph e;
   auto s = e.Init(schema.get(), plan_state.get(), exec_state_.get(), plan_fragment_.get(),
@@ -722,9 +729,9 @@ class GRPCExecGraphTest : public ::testing::Test {
     func_registry_->RegisterOrDie<MultiplyUDF>("multiply");
 
     auto table_store = std::make_shared<table_store::TableStore>();
-    exec_state_ =
-        std::make_unique<ExecState>(func_registry_.get(), table_store, MockResultSinkStubGenerator,
-                                    sole::uuid4(), nullptr, grpc_router_.get());
+    exec_state_ = std::make_unique<ExecState>(
+        func_registry_.get(), table_store, MockResultSinkStubGenerator, MockMetricsStubGenerator,
+        MockTraceStubGenerator, sole::uuid4(), nullptr, grpc_router_.get());
   }
 
   void SetUpPlanFragment() {

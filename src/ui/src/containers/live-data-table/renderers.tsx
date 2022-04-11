@@ -27,10 +27,12 @@ import {
   AlertData,
   BytesRenderer,
   CPUData,
+  dataWithUnitsToString,
   DataWithUnits,
-  DurationRenderer,
+  BasicDurationRenderer,
   formatDuration,
   HTTPStatusCodeRenderer,
+  LatencyDurationRenderer,
   PercentRenderer,
   PortRenderer,
   ThroughputBytesRenderer,
@@ -58,12 +60,6 @@ import { getColor, getLatencyNSLevel } from 'app/utils/metric-thresholds';
 import { ColumnDisplayInfo, QuantilesDisplayState } from './column-display-info';
 
 interface Quant { p50: number; p90: number; p99: number; }
-
-// Helper to durationQuantilesRenderer since it takes in a string, rather than a span
-// for p50Display et al.
-function dataWithUnitsToString(dataWithUnits: DataWithUnits): string {
-  return `${dataWithUnits.val} ${dataWithUnits.units}`;
-}
 
 interface LiveCellProps {
   data: any;
@@ -221,6 +217,14 @@ function getDataCell(formatter: (data: any) => string) {
   return Renderer;
 }
 
+function getDurationRenderer(
+  columnName: string, st: SemanticType, dt: DataType,
+): React.ComponentType<LiveCellProps> {
+  const isLatency = looksLikeLatencyCol(columnName, st, dt);
+  if (isLatency) return LatencyDurationRenderer;
+  return BasicDurationRenderer;
+}
+
 export function getLiveCellRenderer(
   table: VizierTable,
   display: ColumnDisplayInfo,
@@ -243,7 +247,7 @@ export function getLiveCellRenderer(
     case SemanticType.ST_PORT:
       return PortRenderer;
     case SemanticType.ST_DURATION_NS:
-      return DurationRenderer;
+      return getDurationRenderer(columnName, st, dt);
     case SemanticType.ST_BYTES:
       return BytesRenderer;
     case SemanticType.ST_HTTP_RESP_STATUS:

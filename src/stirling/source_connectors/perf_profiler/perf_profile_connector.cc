@@ -33,8 +33,6 @@ BPF_SRC_STRVIEW(profiler_bcc_script, profiler);
 DEFINE_string(stirling_profiler_symbolizer, "bcc",
               "Choice of which symbolizer to use. Options: bcc, elf");
 DEFINE_bool(stirling_profiler_cache_symbols, true, "Whether to cache symbols");
-DEFINE_bool(stirling_profiler_java_symbols, gflags::BoolFromEnv("PL_PROFILER_JAVA_SYMBOLS", false),
-            "Whether to symbolize Java binaries.");
 DEFINE_uint32(stirling_profiler_log_period_minutes, 10,
               "Number of minutes between profiler stats log printouts.");
 DEFINE_uint32(stirling_profiler_table_update_period_seconds,
@@ -50,8 +48,8 @@ DEFINE_double(stirling_profiler_stack_trace_size_factor, 3.0,
 // Scaling factor for perf buffer to account for timing variations.
 // This factor is smaller than the stack trace scaling factor because there is no need to account
 // for hash table collisions.
-DEFINE_double(stirling_profiler_perf_buffer_size_factor, 1.5,
-              "Scaling factor to apply to Profiler's eBPF perf buffer map sizes");
+DEFINE_double(stirling_profiler_perf_buffer_size_factor, 1.2,
+              "Scaling factor to apply to Profiler's eBPF perf buffer sizes");
 
 namespace px {
 namespace stirling {
@@ -103,7 +101,21 @@ Status PerfProfileConnector::InitImpl() {
   const double perf_buffer_overprovision_factor = FLAGS_stirling_profiler_perf_buffer_size_factor;
   const int32_t num_perf_buffer_entries =
       static_cast<int32_t>(perf_buffer_overprovision_factor * expected_stack_traces_per_cpu);
-  const int32_t perf_buffer_size = sizeof(stack_trace_key_t) * num_perf_buffer_entries;
+
+  // Perf buffer entries use the following struct:
+  //      struct {
+  //        struct perf_event_header {
+  //          __u32   type;
+  //          __u16   misc;
+  //          __u16   size;
+  //        } header;
+  //        u32    size;        /* if PERF_SAMPLE_RAW */
+  //        char  data[size];   /* if PERF_SAMPLE_RAW */
+  //      };
+  // The entire struct as a whole is 12-bytes + data[size].
+  const int32_t perf_buffer_entry_size =
+      sizeof(struct perf_event_header) + sizeof(uint32_t) + sizeof(stack_trace_key_t);
+  const int32_t perf_buffer_size = perf_buffer_entry_size * num_perf_buffer_entries;
 
   const std::vector<std::string> defines = {
       absl::Substitute("-DCFG_STACK_TRACE_ENTRIES=$0", provisioned_stack_traces),
@@ -146,7 +158,10 @@ Status PerfProfileConnector::InitImpl() {
   PL_ASSIGN_OR_RETURN(k_symbolizer_, BCCSymbolizer::Create());
 
   if (FLAGS_stirling_profiler_java_symbols) {
+    LOG(INFO) << "PerfProfiler: Java symbolization enabled.";
     PL_ASSIGN_OR_RETURN(u_symbolizer_, JavaSymbolizer::Create(std::move(u_symbolizer_)));
+  } else {
+    LOG(INFO) << "PerfProfiler: Java symbolization disabled.";
   }
 
   if (FLAGS_stirling_profiler_cache_symbols) {
@@ -309,7 +324,7 @@ void PerfProfileConnector::CreateRecords(ebpf::BPFStackTable* stack_traces, Conn
     r.Append<r.ColIndex("time_")>(timestamp_ns);
     r.Append<r.ColIndex("upid")>(key.upid.value());
     r.Append<r.ColIndex("stack_trace_id")>(stack_trace_ids_.Lookup(key));
-    r.Append<r.ColIndex("stack_trace"), kMaxStackTraceSize>(key.stack_trace_str);
+    r.Append<r.ColIndex("stack_trace")>(key.stack_trace_str, kMaxStackTraceSize);
     r.Append<r.ColIndex("count")>(count);
   }
 }
@@ -373,15 +388,15 @@ void PerfProfileConnector::PrintStats() const {
     const uint64_t k_accesses = k_symbolizer->stat_accesses();
     const uint64_t u_num_symbols = u_symbolizer->GetNumberOfSymbolsCached();
     const uint64_t k_num_symbols = k_symbolizer->GetNumberOfSymbolsCached();
-    const double u_hit_rate = 100.0 * static_cast<double>(u_hits) / static_cast<double>(u_accesses);
-    const double k_hit_rate = 100.0 * static_cast<double>(k_hits) / static_cast<double>(k_accesses);
+    const double u_hit_rate =
+        u_accesses == 0 ? 0 : 100.0 * static_cast<double>(u_hits) / static_cast<double>(u_accesses);
+    const double k_hit_rate =
+        k_accesses == 0 ? 0 : 100.0 * static_cast<double>(k_hits) / static_cast<double>(k_accesses);
     LOG(INFO) << absl::Substitute(
-        "PerfProfileConnector u_symbolizer num. symbols cached, hits, accesses, hit rate: $0, $1, "
-        "$2, $3%.",
+        "PerfProfileConnector u_symbolizer num_symbols_cached=$0 hits=$1 accesses=$2 hit_rate=$3",
         u_num_symbols, u_hits, u_accesses, u_hit_rate);
     LOG(INFO) << absl::Substitute(
-        "PerfProfileConnector k_symbolizer num. symbols cached, hits, accesses, hit rate: $0, $1, "
-        "$2, $3%.",
+        "PerfProfileConnector k_symbolizer num_symbols_cached=$0 hits=$1 accesses=$2 hit_rate=$3",
         k_num_symbols, k_hits, k_accesses, k_hit_rate);
   }
 }

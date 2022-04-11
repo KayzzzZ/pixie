@@ -23,10 +23,10 @@ REPOSITORY_LOCATIONS = dict(
         ],
     ),
     io_bazel_rules_go = dict(
-        # NOTE: Many BPF test programs are written in Go, to avoid accidentally breaking them.
-        # Run the following command when upgrading Golang version:
-        # scripts/sudo_bazel_run.sh //src/stirling/source_connectors/socket_tracer:http2_trace_bpf_test
-        #
+        # Upgrading this dep causes gcc build to break.
+        # This seems to be a misconfiguration on our side combined with the following change.
+        # https://github.com/bazelbuild/rules_go/commit/1f156d822e5e05d8fb0f1a4f9be2653166487eab
+        # TODO(zasgar): Fix our config and then upgrade rules_go.
         sha256 = "8e968b5fcea1d2d64071872b12737bbb5514524ee5f0a4f54f5920266c261acb",
         urls = [
             "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.28.0/rules_go-v0.28.0.zip",
@@ -299,6 +299,11 @@ REPOSITORY_LOCATIONS = dict(
         urls = ["https://github.com/bazelbuild/rules_jvm_external/archive/refs/tags/4.2.tar.gz"],
         sha256 = "2cd77de091e5376afaf9cc391c15f093ebd0105192373b334f0a855d89092ad5",
         strip_prefix = "rules_jvm_external-4.2",
+    ),
+    com_github_uriparser_uriparser = dict(
+        urls = ["https://github.com/uriparser/uriparser/releases/download/uriparser-0.9.6/uriparser-0.9.6.tar.gz"],
+        sha256 = "10e6f90d359c1087c45f907f95e527a8aca84422251081d1533231e031a084ff",
+        strip_prefix = "uriparser-0.9.6",
     ),
 )
 

@@ -26,6 +26,7 @@
 #include "src/carnot/planner/compilerpb/compiler_status.pb.h"
 #include "src/carnot/planner/ir/pattern_match.h"
 #include "src/carnot/planner/objects/dict_object.h"
+#include "src/carnot/planner/objects/expr_object.h"
 #include "src/common/base/base.h"
 #include "src/common/testing/testing.h"
 #include "src/shared/scriptspb/scripts.pb.h"
@@ -1254,14 +1255,12 @@ TEST_F(ASTVisitorTest, func_def_doesnt_make_new_globals) {
   // then the return value of the function will be the Int TypeObject
   // and thus won't have a node
   auto func_return_obj = var_table->Lookup("foo");
-  ASSERT_TRUE(func_return_obj->HasNode());
-  ASSERT_MATCH(func_return_obj->node(), String());
-  ASSERT_EQ(static_cast<StringIR*>(func_return_obj->node())->str(), "123");
+  ASSERT_OK_AND_ASSIGN(auto return1, GetAsString(func_return_obj));
+  ASSERT_EQ(return1, "123");
 
   auto func2_return_obj = var_table->Lookup("string");
-  ASSERT_TRUE(func2_return_obj->HasNode());
-  ASSERT_MATCH(func2_return_obj->node(), String());
-  ASSERT_EQ(static_cast<StringIR*>(func2_return_obj->node())->str(), "abc");
+  ASSERT_OK_AND_ASSIGN(auto return2, GetAsString(func2_return_obj));
+  ASSERT_EQ(return2, "abc");
 }
 
 constexpr char kReassignPixieMethodsQuery[] = R"pxl(
@@ -1363,9 +1362,8 @@ def plot_latency():
 )pxl";
 
 TEST_F(ASTVisitorTest, problem_decorator_parsed) {
-  auto graph_or_s = CompileGraph(kProblemDecoratorParsing);
-  ASSERT_NOT_OK(graph_or_s);
-  EXPECT_THAT(graph_or_s.status(), HasCompilerError("'vis' object is not callable"));
+  EXPECT_THAT(CompileGraph(kProblemDecoratorParsing).status(),
+              HasCompilerError("'vis' object is not callable"));
 }
 
 constexpr char kGlobalDocStringQuery[] = R"pxl(
@@ -1389,36 +1387,19 @@ constexpr char kFuncDocStringQuery[] = R"pxl(
 import px
 def f():
   """This is a function doc string."""
-  return 1
-df = px.DataFrame(table='cpu', select=['cpu0'])
-px.display(df, f.__doc__)
+  return px.DataFrame(table='cpu', select=['cpu0'])
+px.display(f())
 )pxl";
 
 TEST_F(ASTVisitorTest, func_doc_string) {
+  // Make sure that a function documentation string still allows a function to be called.
   auto graph_or_s = CompileGraph(kFuncDocStringQuery);
   ASSERT_OK(graph_or_s);
   auto graph = graph_or_s.ConsumeValueOrDie();
-  std::vector<IRNode*> sink_nodes = graph->FindNodesThatMatch(ExternalGRPCSink());
-  ASSERT_EQ(sink_nodes.size(), 1);
-  GRPCSinkIR* sink = static_cast<GRPCSinkIR*>(sink_nodes[0]);
-  EXPECT_EQ("This is a function doc string.", sink->name());
-}
-
-constexpr char kNoDocStringQuery[] = R"pxl(
-import px
-df = px.DataFrame(table='cpu', select=['cpu0'])
-a = __doc__
-px.display(df, a)
-)pxl";
-
-TEST_F(ASTVisitorTest, no_doc_string) {
-  auto graph_or_s = CompileGraph(kNoDocStringQuery);
-  ASSERT_OK(graph_or_s);
-  auto graph = graph_or_s.ConsumeValueOrDie();
-  std::vector<IRNode*> sink_nodes = graph->FindNodesThatMatch(ExternalGRPCSink());
-  ASSERT_EQ(sink_nodes.size(), 1);
-  GRPCSinkIR* sink = static_cast<GRPCSinkIR*>(sink_nodes[0]);
-  EXPECT_EQ("", sink->name());
+  std::vector<IRNode*> source_nodes = graph->FindNodesOfType(IRNodeType::kMemorySource);
+  ASSERT_EQ(source_nodes.size(), 1);
+  MemorySourceIR* src = static_cast<MemorySourceIR*>(source_nodes[0]);
+  EXPECT_EQ("cpu", src->table_name());
 }
 
 constexpr char kArgAnnotationsQuery[] = R"pxl(
@@ -1993,8 +1974,16 @@ df = df.head(n=max_num_records)
 px.display(df)
 )pxl";
 TEST_F(ASTVisitorTest, agg_segfault) {
-  EXPECT_THAT(CompileGraph(kAggSegfaultScript).status().msg(),
-              ::testing::ContainsRegex(".*?All elements of the agg tuple must be column names.*?"));
+  EXPECT_THAT(CompileGraph(kAggSegfaultScript).status(),
+              HasCompilerError(".*?All elements of the agg tuple must be column names.*?"));
+}
+
+TEST_F(ASTVisitorTest, error_on_global) {
+  // Tests to make sure that we will have a valid error on global objects that don't start with ast
+  // errors. AstVisitorImpl::LookupVariable should set the ast for any referenced object.
+  auto vt = VarTable::Create();
+  EXPECT_OK(ParseScript(vt, "l = list"));
+  EXPECT_THAT(vt->Lookup("l")->CreateError("new error"), HasCompilerErrorAt(1, 5, "new error"));
 }
 
 }  // namespace compiler

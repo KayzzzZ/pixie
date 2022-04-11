@@ -679,9 +679,10 @@ func (s *Server) VizierConnected(ctx context.Context, req *cvmsgspb.RegisterVizi
 	}
 
 	// Send a message over NATS to signal that a Vizier has connected.
-	query = `SELECT org_id from vizier_cluster WHERE id=$1`
+	query = `SELECT org_id, cluster_name from vizier_cluster WHERE id=$1`
 	var val struct {
-		OrgID uuid.UUID `db:"org_id"`
+		OrgID      uuid.UUID `db:"org_id"`
+		VizierName string    `db:"cluster_name"`
 	}
 
 	rows, err := s.db.Queryx(query, vizierID)
@@ -709,7 +710,10 @@ func (s *Server) VizierConnected(ctx context.Context, req *cvmsgspb.RegisterVizi
 	if err != nil {
 		return nil, err
 	}
-	return &cvmsgspb.RegisterVizierAck{Status: cvmsgspb.ST_OK}, nil
+	return &cvmsgspb.RegisterVizierAck{
+		Status:     cvmsgspb.ST_OK,
+		VizierName: val.VizierName,
+	}, nil
 }
 
 // HandleVizierHeartbeat handles the heartbeat from connected viziers.
@@ -957,7 +961,7 @@ func findVizierWithEmptyUID(ctx context.Context, tx *sqlx.Tx, orgID uuid.UUID) (
 	return uuid.Nil, vizierStatus(cvmsgspb.VZ_ST_UNKNOWN), nil
 }
 
-func setClusterName(ctx context.Context, tx *sqlx.Tx, clusterID uuid.UUID, generateName func(i int) string) error {
+func setClusterName(ctx context.Context, tx *sqlx.Tx, clusterID uuid.UUID, generateName func(i int) string) (string, error) {
 	// Retry a few times until we find a name that doesn't collide.
 	finalName := ""
 	for rc := 0; rc < 10; rc++ {
@@ -973,21 +977,21 @@ func setClusterName(ctx context.Context, tx *sqlx.Tx, clusterID uuid.UUID, gener
 	}
 
 	if finalName == "" {
-		return errors.New("Could not find a unique cluster name")
+		return "", errors.New("Could not find a unique cluster name")
 	}
 
 	query := `UPDATE vizier_cluster SET cluster_name=$1 WHERE id=$2`
 	_, err := tx.ExecContext(ctx, query, finalName, clusterID)
 
-	return err
+	return finalName, err
 }
 
 // ProvisionOrClaimVizier provisions a given cluster or returns the ID if it already exists,
-func (s *Server) ProvisionOrClaimVizier(ctx context.Context, orgID uuid.UUID, userID uuid.UUID, clusterUID string, clusterName string) (uuid.UUID, error) {
+func (s *Server) ProvisionOrClaimVizier(ctx context.Context, orgID uuid.UUID, userID uuid.UUID, clusterUID string, clusterName string) (uuid.UUID, string, error) {
 	// TODO(zasgar): This duplicates some functionality in the Create function. Will deprecate that Create function soon.
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return uuid.Nil, vzerrors.ErrInternalDB
+		return uuid.Nil, "", vzerrors.ErrInternalDB
 	}
 	defer tx.Rollback()
 
@@ -1007,20 +1011,20 @@ func (s *Server) ProvisionOrClaimVizier(ctx context.Context, orgID uuid.UUID, us
 		return name
 	}
 
-	assignNameAndCommit := func() (uuid.UUID, error) {
+	assignNameAndCommit := func() (uuid.UUID, string, error) {
 		// Check if cluster already has a name.
 		var existingName *string
 
 		query := `SELECT cluster_name from vizier_cluster WHERE id=$1`
 		err := tx.QueryRowxContext(ctx, query, clusterID).Scan(&existingName)
 		if err != nil {
-			return uuid.Nil, vzerrors.ErrInternalDB
+			return uuid.Nil, "", vzerrors.ErrInternalDB
 		}
 
 		if existingName != nil {
 			// No input name specified, so no need to change cluster name.
 			if inputName == "" {
-				return clusterID, nil
+				return clusterID, *existingName, nil
 			}
 
 			// The existing name is already the same as the input name, or a derivation
@@ -1031,14 +1035,14 @@ func (s *Server) ProvisionOrClaimVizier(ctx context.Context, orgID uuid.UUID, us
 			// cannot distinguish between randomly generated names and actual-unaltered names.
 			dbName := *existingName
 			if inputName == dbName {
-				return clusterID, nil
+				return clusterID, *existingName, nil
 			}
 			prefixIndex := strings.LastIndex(dbName, "_")
 			if prefixIndex != -1 {
 				dbName = dbName[:prefixIndex]
 			}
 			if inputName == dbName {
-				return clusterID, nil
+				return clusterID, *existingName, nil
 			}
 		}
 
@@ -1047,13 +1051,14 @@ func (s *Server) ProvisionOrClaimVizier(ctx context.Context, orgID uuid.UUID, us
 			generateNameFunc = generateFromGivenName
 		}
 
-		if err := setClusterName(ctx, tx, clusterID, generateNameFunc); err != nil {
-			return uuid.Nil, vzerrors.ErrInternalDB
+		finalName, err := setClusterName(ctx, tx, clusterID, generateNameFunc)
+		if err != nil {
+			return uuid.Nil, "", vzerrors.ErrInternalDB
 		}
 
 		if err := tx.Commit(); err != nil {
 			log.WithError(err).Error("Failed to commit transaction")
-			return uuid.Nil, vzerrors.ErrInternalDB
+			return uuid.Nil, "", vzerrors.ErrInternalDB
 		}
 
 		events.Client().Enqueue(&analytics.Track{
@@ -1063,30 +1068,30 @@ func (s *Server) ProvisionOrClaimVizier(ctx context.Context, orgID uuid.UUID, us
 				Set("cluster_id", clusterID.String()).
 				Set("org_id", orgID.String()),
 		})
-		return clusterID, nil
+		return clusterID, finalName, nil
 	}
 
 	clusterID, status, err := findVizierWithUID(ctx, tx, orgID, clusterUID)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, "", err
 	}
 	if clusterID != uuid.Nil {
 		if status != vizierStatus(cvmsgspb.VZ_ST_DISCONNECTED) {
-			return uuid.Nil, vzerrors.ErrProvisionFailedVizierIsActive
+			return uuid.Nil, "", vzerrors.ErrProvisionFailedVizierIsActive
 		}
 		return assignNameAndCommit()
 	}
 
 	clusterID, _, err = findVizierWithEmptyUID(ctx, tx, orgID)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, "", err
 	}
 	if clusterID != uuid.Nil {
 		// Set the cluster ID.
 		query := `UPDATE vizier_cluster SET cluster_uid=$1 WHERE id=$2`
 		rows, err := tx.QueryxContext(ctx, query, clusterUID, clusterID)
 		if err != nil {
-			return uuid.Nil, err
+			return uuid.Nil, "", err
 		}
 		rows.Close()
 		return assignNameAndCommit()
@@ -1100,7 +1105,20 @@ func (s *Server) ProvisionOrClaimVizier(ctx context.Context, orgID uuid.UUID, us
 		INSERT INTO vizier_cluster_info(vizier_cluster_id, status) SELECT id, 'DISCONNECTED' FROM ins RETURNING vizier_cluster_id`
 	err = tx.QueryRowContext(ctx, query, orgID, DefaultProjectName, clusterUID).Scan(&clusterID)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, "", err
 	}
 	return assignNameAndCommit()
+}
+
+// GetOrgFromVizier fetches the org to which a Vizier belongs. This is intended to be for internal use only.
+func (s *Server) GetOrgFromVizier(ctx context.Context, id *uuidpb.UUID) (*vzmgrpb.GetOrgFromVizierResponse, error) {
+	query := `SELECT org_id FROM vizier_cluster where id=$1`
+
+	vzID := utils.UUIDFromProtoOrNil(id)
+	var orgID uuid.UUID
+	err := s.db.QueryRowxContext(ctx, query, vzID).Scan(&orgID)
+	if err != nil {
+		return nil, err
+	}
+	return &vzmgrpb.GetOrgFromVizierResponse{OrgID: utils.ProtoFromUUID(orgID)}, nil
 }

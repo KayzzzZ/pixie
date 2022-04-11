@@ -37,13 +37,13 @@ const (
 	defaultDataAccess                = "Full"
 	defaultDatastreamBufferSize      = 1024 * 1024
 	defaultDatastreamBufferSpikeSize = 1024 * 1024 * 500
-	defaultTableStoreTableSizeLimit  = 1024 * 1024 * 64
 	defaultElectionPeriodMs          = 7500
 )
 
 // VizierTmplValues are the template values that can be used to fill out templated Vizier YAMLs.
 type VizierTmplValues struct {
 	DeployKey                 string
+	CustomDeployKeySecret     string
 	CustomAnnotations         string
 	CustomLabels              string
 	CloudAddr                 string
@@ -58,7 +58,6 @@ type VizierTmplValues struct {
 	DataAccess                string
 	DatastreamBufferSize      uint32
 	DatastreamBufferSpikeSize uint32
-	TableStoreTableSizeLimit  int32
 	ElectionPeriodMs          int64
 	CustomPEMFlags            map[string]string
 }
@@ -68,6 +67,7 @@ func VizierTmplValuesToArgs(tmplValues *VizierTmplValues) *yamls.YAMLTmplArgumen
 	return &yamls.YAMLTmplArguments{
 		Values: &map[string]interface{}{
 			"deployKey":                 tmplValues.DeployKey,
+			"customDeployKeySecret":     tmplValues.CustomDeployKeySecret,
 			"customAnnotations":         tmplValues.CustomAnnotations,
 			"customLabels":              tmplValues.CustomLabels,
 			"cloudAddr":                 tmplValues.CloudAddr,
@@ -81,7 +81,6 @@ func VizierTmplValuesToArgs(tmplValues *VizierTmplValues) *yamls.YAMLTmplArgumen
 			"dataAccess":                tmplValues.DataAccess,
 			"datastreamBufferSize":      tmplValues.DatastreamBufferSize,
 			"datastreamBufferSpikeSize": tmplValues.DatastreamBufferSpikeSize,
-			"tableStoreTableSizeLimit":  tmplValues.TableStoreTableSizeLimit,
 			"electionPeriodMs":          tmplValues.ElectionPeriodMs,
 			"customPEMFlags":            tmplValues.CustomPEMFlags,
 		},
@@ -412,12 +411,6 @@ func generateVzYAMLs(clientset *kubernetes.Clientset, yamlMap map[string]string)
 			TemplateValue:   fmt.Sprintf(`{{ if .Values.datastreamBufferSpikeSize }}"{{.Values.datastreamBufferSpikeSize}}"{{else}}"%d"{{end}}`, defaultDatastreamBufferSpikeSize),
 		},
 		{
-			TemplateMatcher: yamls.GenerateContainerNameMatcherFn("pem"),
-			Patch:           `{"spec": {"template": { "spec": { "containers": [{"name": "pem", "env": [{"name": "PL_TABLE_STORE_TABLE_SIZE_LIMIT", "value": "__PX_TABLE_STORE_TABLE_SIZE_LIMIT__"}]}] } } } }`,
-			Placeholder:     "__PX_TABLE_STORE_TABLE_SIZE_LIMIT__",
-			TemplateValue:   fmt.Sprintf(`{{ if .Values.tableStoreTableSizeLimit }}"{{.Values.tableStoreTableSizeLimit}}"{{else}}"%d"{{end}}`, defaultTableStoreTableSizeLimit),
-		},
-		{
 			TemplateMatcher: yamls.GenerateResourceNameMatcherFn("vizier-metadata"),
 			Patch:           `{"spec": {"template": {"spec": {"containers": [{"name": "app", "env": [{"name": "PL_RENEW_PERIOD","value": "__PX_RENEW_PERIOD__"}]}] } } } }`,
 			Placeholder:     "__PX_RENEW_PERIOD__",
@@ -438,6 +431,12 @@ func generateVzYAMLs(clientset *kubernetes.Clientset, yamlMap map[string]string)
         - name: {{$key}}
           value: "{{$value}}"
         {{- end}}`,
+		},
+		{
+			TemplateMatcher: yamls.GenerateResourceNameMatcherFn("vizier-cloud-connector"),
+			Patch:           `{"spec": {"template": {"spec": {"containers": [{"name": "app", "env": [{"name": "PL_DEPLOY_KEY", "valueFrom": { "secretKeyRef": { "key": "deploy-key", "name": "__PX_DEPLOY_KEY_SECRET_NAME__", "optional": true} } }]}] }  } } }`,
+			Placeholder:     "__PX_DEPLOY_KEY_SECRET_NAME__",
+			TemplateValue:   `{{ if .Values.customDeployKeySecret }}"{{ .Values.customDeployKeySecret }}"{{else}}"pl-deploy-secrets"{{end}}`,
 		},
 	}...)
 

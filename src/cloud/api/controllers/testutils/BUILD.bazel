@@ -28,6 +28,7 @@ go_library(
         "//src/cloud/artifact_tracker/artifacttrackerpb/mock",
         "//src/cloud/auth/authpb/mock",
         "//src/cloud/config_manager/configmanagerpb/mock",
+        "//src/cloud/plugin/pluginpb/mock",
         "//src/cloud/profile/profilepb/mock",
         "//src/cloud/vzmgr/vzmgrpb/mock",
         "@com_github_golang_mock//gomock",

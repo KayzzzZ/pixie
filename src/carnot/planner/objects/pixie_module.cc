@@ -18,13 +18,17 @@
 
 #include "src/carnot/planner/objects/pixie_module.h"
 
+#include <memory>
 #include <vector>
 
 #include "src/carnot/planner/ir/time.h"
 #include "src/carnot/planner/objects/dataframe.h"
 #include "src/carnot/planner/objects/dict_object.h"
+#include "src/carnot/planner/objects/exporter.h"
 #include "src/carnot/planner/objects/expr_object.h"
+#include "src/carnot/planner/objects/funcobject.h"
 #include "src/carnot/planner/objects/none_object.h"
+#include "src/carnot/planner/objects/otel.h"
 #include "src/carnot/planner/objects/viz_object.h"
 #include "src/shared/upid/upid.h"
 
@@ -47,15 +51,11 @@ StatusOr<QLObjectPtr> UDFHandler(IR* graph, std::string name, const pypa::AstPtr
                                  const ParsedArgs& args, ASTVisitor* visitor) {
   std::vector<ExpressionIR*> expr_args;
   for (const auto& arg : args.variable_args()) {
-    if (!arg->HasNode()) {
-      return CreateAstError(ast, "Argument to udf '$0' must be an expression", name);
+    if (!ExprObject::IsExprObject(arg)) {
+      return arg->CreateError("Argument to '$0' must be an expression, received $1", name,
+                              arg->name());
     }
-    auto ir_node = arg->node();
-    if (!Match(ir_node, Expression())) {
-      return ir_node->CreateIRNodeError("Argument must be an expression, got a $0",
-                                        ir_node->type_string());
-    }
-    expr_args.push_back(static_cast<ExpressionIR*>(ir_node));
+    expr_args.push_back(static_cast<ExprObject*>(arg.get())->expr());
   }
   FuncIR::Op op{FuncIR::Opcode::non_op, "", name};
   PL_ASSIGN_OR_RETURN(FuncIR * node, graph->CreateNode<FuncIR>(ast, op, expr_args));
@@ -280,12 +280,11 @@ StatusOr<QLObjectPtr> EqualsAny(IR* graph, const pypa::AstPtr& ast, const Parsed
   ExpressionIR* or_expr = nullptr;
 
   for (const auto& [idx, value] : Enumerate(comparison_values->items())) {
-    if (!value->HasNode()) {
-      return value->CreateError("Could not get IRNode from index '$0'", idx);
+    if (!ExprObject::IsExprObject(value)) {
+      return value->CreateError("Expected item in index $0 be an expression, received $1", idx,
+                                value->name());
     }
-    PL_ASSIGN_OR_RETURN(auto comparison_expr,
-                        AsNodeType<ExpressionIR>(value->node(), absl::Substitute("$0", idx)));
-
+    auto comparison_expr = static_cast<ExprObject*>(value.get())->expr();
     FuncIR::Op equal{FuncIR::eq, "equal", "equal"};
     PL_ASSIGN_OR_RETURN(auto new_equals, graph->CreateNode<FuncIR>(comparison_expr->ast(), equal,
                                                                    std::vector<ExpressionIR*>{
@@ -332,7 +331,7 @@ StatusOr<QLObjectPtr> ScriptReference(IR* graph, const pypa::AstPtr& ast, const 
   QLObjectPtr script_args = args.GetArg("args");
   if (!DictObject::IsDict(script_args)) {
     return script_args->CreateError(
-        "Expected third arguemnt 'args' of function 'script_reference' to be a dictionary, "
+        "Expected third argument 'args' of function 'script_reference' to be a dictionary, "
         "received "
         "$0",
         script_args->name());
@@ -372,6 +371,20 @@ StatusOr<QLObjectPtr> ParseDuration(IR* graph, const pypa::AstPtr& ast, const Pa
 
   PL_ASSIGN_OR_RETURN(IntIR * node, graph->CreateNode<IntIR>(ast, int_or_s.ConsumeValueOrDie()));
   return ExprObject::Create(node, visitor);
+}
+
+StatusOr<QLObjectPtr> Export(const pypa::AstPtr& ast, const ParsedArgs& args, ASTVisitor* visitor) {
+  PL_ASSIGN_OR_RETURN(auto df, GetAsDataFrame(args.GetArg("out")));
+
+  QLObjectPtr spec = args.GetArg("export_spec");
+  if (!Exporter::IsExporter(spec)) {
+    return spec->CreateError("Expected 'spec' to be an export config. Received a $0", spec->name());
+  }
+
+  auto exporter = std::static_pointer_cast<Exporter>(spec);
+  PL_RETURN_IF_ERROR(exporter->Export(ast, df.get()));
+
+  return StatusOr(std::make_shared<NoneObject>(visitor));
 }
 
 Status PixieModule::RegisterCompileTimeFuncs() {
@@ -526,10 +539,10 @@ StatusOr<QLObjectPtr> NoopDisplayHandler(IR*, CompilerState*, const pypa::AstPtr
 StatusOr<QLObjectPtr> DisplayHandler(IR* graph, CompilerState* compiler_state,
                                      const pypa::AstPtr& ast, const ParsedArgs& args,
                                      ASTVisitor* visitor) {
-  PL_ASSIGN_OR_RETURN(OperatorIR * out_op, GetArgAs<OperatorIR>(ast, args, "out"));
+  PL_ASSIGN_OR_RETURN(auto df, GetAsDataFrame(args.GetArg("out")));
   PL_ASSIGN_OR_RETURN(StringIR * name, GetArgAs<StringIR>(ast, args, "name"));
 
-  PL_RETURN_IF_ERROR(AddResultSink(graph, ast, name->str(), out_op,
+  PL_RETURN_IF_ERROR(AddResultSink(graph, ast, name->str(), df->op(),
                                    compiler_state->result_address(),
                                    compiler_state->result_ssl_targetname()));
   return StatusOr(std::make_shared<NoneObject>(visitor));
@@ -539,7 +552,7 @@ StatusOr<QLObjectPtr> DebugDisplayHandler(IR* graph, CompilerState* compiler_sta
                                           const absl::flat_hash_set<std::string>& reserved_names,
                                           const pypa::AstPtr& ast, const ParsedArgs& args,
                                           ASTVisitor* visitor) {
-  PL_ASSIGN_OR_RETURN(OperatorIR * out_op, GetArgAs<OperatorIR>(ast, args, "out"));
+  PL_ASSIGN_OR_RETURN(auto df, GetAsDataFrame(args.GetArg("out")));
   PL_ASSIGN_OR_RETURN(StringIR * name, GetArgAs<StringIR>(ast, args, "name"));
 
   std::string out_name = PixieModule::kDebugTablePrefix + name->str();
@@ -551,7 +564,7 @@ StatusOr<QLObjectPtr> DebugDisplayHandler(IR* graph, CompilerState* compiler_sta
     ++i;
   }
 
-  PL_RETURN_IF_ERROR(AddResultSink(graph, ast, out_name, out_op, compiler_state->result_address(),
+  PL_RETURN_IF_ERROR(AddResultSink(graph, ast, out_name, df->op(), compiler_state->result_address(),
                                    compiler_state->result_ssl_targetname()));
   return StatusOr(std::make_shared<NoneObject>(visitor));
 }
@@ -574,7 +587,18 @@ Status PixieModule::Init() {
                                    std::placeholders::_2, std::placeholders::_3),
                          ast_visitor()));
 
+  PL_RETURN_IF_ERROR(display_fn->SetDocString(kDisplayOpDocstring));
   AddMethod(kDisplayOpID, display_fn);
+
+  PL_ASSIGN_OR_RETURN(std::shared_ptr<FuncObject> export_fn,
+                      FuncObject::Create(kExportOpID, {"out", "export_spec"}, {},
+                                         /* has_variable_len_args */ false,
+                                         /* has_variable_len_kwargs */ false,
+                                         std::bind(&Export, std::placeholders::_1,
+                                                   std::placeholders::_2, std::placeholders::_3),
+                                         ast_visitor()));
+
+  AddMethod(kExportOpID, export_fn);
 
   PL_ASSIGN_OR_RETURN(
       std::shared_ptr<FuncObject> debug_fn,
@@ -586,12 +610,17 @@ Status PixieModule::Init() {
                     std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
           ast_visitor()));
 
+  PL_RETURN_IF_ERROR(debug_fn->SetDocString(kDebugOpDocstring));
   AddMethod(kDebugOpID, debug_fn);
 
   PL_ASSIGN_OR_RETURN(auto base_df, Dataframe::Create(graph_, ast_visitor()));
   PL_RETURN_IF_ERROR(AssignAttribute(kDataframeOpID, base_df));
   PL_ASSIGN_OR_RETURN(auto viz, VisualizationObject::Create(ast_visitor()));
-  return AssignAttribute(kVisAttrID, viz);
+  PL_RETURN_IF_ERROR(AssignAttribute(kVisAttrID, viz));
+
+  PL_ASSIGN_OR_RETURN(auto otel, OTelModule::Create(compiler_state_, ast_visitor(), graph_));
+  PL_RETURN_IF_ERROR(AssignAttribute("otel", otel));
+  return Status::OK();
 }
 
 }  // namespace compiler

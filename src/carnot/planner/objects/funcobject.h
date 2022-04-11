@@ -28,6 +28,7 @@
 #include "src/carnot/planner/ast/ast_visitor.h"
 #include "src/carnot/planner/ir/ir.h"
 #include "src/carnot/planner/ir/ir_node_type_conversion.h"
+#include "src/carnot/planner/objects/expr_object.h"
 #include "src/carnot/planner/objects/qlobject.h"
 #include "src/carnot/planner/objects/type_object.h"
 
@@ -183,7 +184,7 @@ class FuncObject : public QLObject {
   VisSpec* vis_spec() const { return vis_spec_.get(); }
 
   Status ResolveArgAnnotationsToTypes(
-      const absl::flat_hash_map<std::string, QLObjectPtr> arg_annotation_objs);
+      const absl::flat_hash_map<std::string, QLObjectPtr>& arg_annotation_objs);
 
   const absl::flat_hash_map<std::string, std::shared_ptr<TypeObject>>& arg_types() const {
     return arg_types_;
@@ -201,7 +202,7 @@ class FuncObject : public QLObject {
 
   bool HasArgType(std::string_view arg);
 
-  std::string FormatArguments(const absl::flat_hash_set<std::string> args);
+  std::string FormatArguments(const absl::flat_hash_set<std::string>& args);
 
   int64_t NumArgs() const { return arguments_.size(); }
   int64_t NumPositionalArgs() const { return NumArgs() - defaults_.size(); }
@@ -223,16 +224,17 @@ class FuncObject : public QLObject {
 };
 
 template <typename TIRNode>
-StatusOr<TIRNode*> GetArgAs(QLObjectPtr arg, std::string_view arg_name) {
-  if (!arg->HasNode()) {
+StatusOr<TIRNode*> GetArgAs(const QLObjectPtr& arg, std::string_view arg_name) {
+  if (!ExprObject::IsExprObject(arg)) {
     return arg->CreateError("Expected '$0' in arg '$1', got '$2'", IRNodeTraits<TIRNode>::name,
                             arg_name, QLObjectTypeString(arg->type()));
   }
-  return AsNodeType<TIRNode>(arg->node(), arg_name);
+  return AsNodeType<TIRNode>(static_cast<ExprObject*>(arg.get())->expr(), arg_name);
 }
 
 template <typename TIRNode>
-StatusOr<TIRNode*> GetArgAs(const pypa::AstPtr& ast, QLObjectPtr arg, std::string_view arg_name) {
+StatusOr<TIRNode*> GetArgAs(const pypa::AstPtr& ast, const QLObjectPtr& arg,
+                            std::string_view arg_name) {
   return WrapError(ast, GetArgAs<TIRNode>(arg, arg_name));
 }
 
@@ -251,7 +253,8 @@ StatusOr<TIRNode*> GetArgAs(const pypa::AstPtr& ast, const ParsedArgs& args,
  * @param pyobject
  * @return StatusOr<std::shared_ptr<FuncObject>>
  */
-StatusOr<std::shared_ptr<FuncObject>> GetCallMethod(const pypa::AstPtr& ast, QLObjectPtr pyobject);
+StatusOr<std::shared_ptr<FuncObject>> GetCallMethod(const pypa::AstPtr& ast,
+                                                    const QLObjectPtr& pyobject);
 
 }  // namespace compiler
 }  // namespace planner

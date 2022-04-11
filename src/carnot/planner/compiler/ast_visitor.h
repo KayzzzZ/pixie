@@ -79,13 +79,36 @@ class ASTVisitorImpl : public ASTVisitor {
    * Variable table and the pixie module are created with this call.
    *
    * @param graph
+   * @param var_table
+   * @param module_handler
    * @param compiler_state
-   * @param arg_values
+   * @param module_handler
+   * @param reserved_names
+   * @param module_map
    * @return StatusOr<std::shared_ptr<ASTVisitorImpl>>
    */
   static StatusOr<std::shared_ptr<ASTVisitorImpl>> Create(
       IR* graph, MutationsIR* mutations, CompilerState* compiler_state,
       ModuleHandler* module_handler, bool func_based_exec = false,
+      const absl::flat_hash_set<std::string>& reserved_names = {},
+      const absl::flat_hash_map<std::string, std::string>& module_map = {});
+
+  /**
+   * @brief Creates a top-level AST Visitor with the given graph and compiler state.
+   *
+   *
+   * @param graph
+   * @param var_table
+   * @param module_handler
+   * @param compiler_state
+   * @param module_handler
+   * @param reserved_names
+   * @param module_map
+   * @return StatusOr<std::shared_ptr<ASTVisitorImpl>>
+   */
+  static StatusOr<std::shared_ptr<ASTVisitorImpl>> Create(
+      IR* graph, std::shared_ptr<VarTable> var_table, MutationsIR* mutations,
+      CompilerState* compiler_state, ModuleHandler* module_handler, bool func_based_exec = false,
       const absl::flat_hash_set<std::string>& reserved_names = {},
       const absl::flat_hash_map<std::string, std::string>& module_map = {});
 
@@ -401,16 +424,6 @@ class ASTVisitorImpl : public ASTVisitor {
    * @return StatusOr<ExpressionIR*> the ir representation of the string.
    */
   StatusOr<QLObjectPtr> ProcessStr(const pypa::AstStrPtr& ast);
-
-  /**
-   * @brief Gets the name string contained within the Name ast node and returns the IRNode
-   * referenced by that name, or errors out with an undefined variable.
-   *
-   * @param name
-   * @return StatusOr<OperatorIR*> - The operator referenced by the name, or an error if not
-   * found.
-   */
-  StatusOr<OperatorIR*> LookupName(const pypa::AstNamePtr& name);
 
   /**
    * @brief Returns the FuncIR::Op struct that corresponds to a python_op

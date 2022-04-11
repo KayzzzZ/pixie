@@ -41,6 +41,8 @@ service VZMgrService {
   rpc UpdateVizierConfig(cvmsgspb.UpdateVizierConfigRequest) returns (cvmsgspb.UpdateVizierConfigResponse);
   // This call is made when we want to update or install a Vizier.
   rpc UpdateOrInstallVizier(cvmsgspb.UpdateOrInstallVizierRequest) returns (cvmsgspb.UpdateOrInstallVizierResponse);
+  // Given a VizierID, get the org who owns that vizier. This should be for internal use only.
+  rpc GetOrgFromVizier(uuidpb.UUID) returns (GetOrgFromVizierResponse);
 }
 
 message CreateVizierClusterRequest {
@@ -97,7 +99,7 @@ service VZDeploymentKeyService {
   // Get the key specified by ID.
   rpc Get(GetDeploymentKeyRequest) returns (GetDeploymentKeyResponse);
   // Delete the Key specified by ID.
-  rpc Delete(uuidpb.UUID) returns (google.protobuf.Empty);
+  rpc Delete(DeleteDeploymentKeyRequest) returns (google.protobuf.Empty);
   // Lookup the Deployment key information by the key value.
   rpc LookupDeploymentKey(LookupDeploymentKeyRequest) returns (LookupDeploymentKeyResponse);
 }
@@ -134,11 +136,12 @@ message DeploymentKey {
 message CreateDeploymentKeyRequest {
   // Description for the key.
   string desc = 1;
+  uuidpb.UUID org_id = 2 [(gogoproto.customname) = "OrgID"];
+  uuidpb.UUID user_id = 3 [(gogoproto.customname) = "UserID"];
 }
 
 message ListDeploymentKeyRequest {
-  // Empty message on purpose so we can extend with attributes easily if needed.
-
+  uuidpb.UUID org_id = 1 [(gogoproto.customname) = "OrgID"];
 }
 
 message ListDeploymentKeyResponse {
@@ -147,10 +150,16 @@ message ListDeploymentKeyResponse {
 
 message GetDeploymentKeyRequest {
   uuidpb.UUID id = 1 [(gogoproto.customname) = "ID"];
+  uuidpb.UUID org_id = 2 [(gogoproto.customname) = "OrgID"];
 }
 
 message GetDeploymentKeyResponse {
   DeploymentKey key = 1;
+}
+
+message DeleteDeploymentKeyRequest {
+  uuidpb.UUID id = 1 [(gogoproto.customname) = "ID"];
+  uuidpb.UUID org_id = 2 [(gogoproto.customname) = "OrgID"];
 }
 
 message LookupDeploymentKeyRequest {
@@ -189,4 +198,12 @@ message RegisterVizierDeploymentRequest {
 message RegisterVizierDeploymentResponse {
   // The ID for this Vizier.
   uuidpb.UUID vizier_id = 1 [(gogoproto.customname) = "VizierID"];
+  // The name for this Vizier.
+  string vizier_name = 2;
+}
+
+// GetOrgFromVizierResponse returns which org the given Vizier belongs to.
+message GetOrgFromVizierResponse {
+  // The org which owns the Vizier.
+  uuidpb.UUID org_id = 1 [(gogoproto.customname) = "OrgID"];
 }

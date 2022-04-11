@@ -137,8 +137,7 @@ TEST_P(GRPCTraceTest, CaptureRPCTraceRecord) {
   StopTransferDataThread();
 
   std::vector<TaggedRecordBatch> tablets = ConsumeRecords(SocketTraceConnector::kHTTPTableNum);
-  ASSERT_FALSE(tablets.empty());
-  const types::ColumnWrapperRecordBatch& rb = tablets[0].records;
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& rb, tablets);
   const std::vector<size_t> target_record_indices =
       FindRecordIdxMatchesPID(rb, kHTTPUPIDIdx, server_.pid());
   ASSERT_GE(target_record_indices.size(), 1);
@@ -180,7 +179,8 @@ INSTANTIATE_TEST_SUITE_P(SecurityModeTest, GRPCTraceTest,
                              // Did not enumerate all combinations, as they are independent based on
                              // our knowledge, and to minimize test size to reduce flakiness.
                              TestParams{"1_16", true, true}, TestParams{"1_16", true, false},
-                             TestParams{"1_17", false, true}, TestParams{"1_17", false, false}));
+                             TestParams{"1_17", false, true}, TestParams{"1_17", false, false},
+                             TestParams{"1_18", false, true}, TestParams{"1_18", true, false}));
 
 }  // namespace stirling
 }  // namespace px

@@ -31,8 +31,8 @@
 namespace px {
 namespace stirling {
 
-using ::px::stirling::testing::ColWrapperSizeIs;
 using ::px::stirling::testing::FindRecordsMatchingPID;
+using ::px::stirling::testing::RecordBatchSizeIs;
 using ::px::stirling::testing::SocketTraceBPFTest;
 
 using ::testing::Each;
@@ -72,9 +72,7 @@ TEST_F(DNSTraceTest, Capture) {
 
   // Grab the data from Stirling.
   std::vector<TaggedRecordBatch> tablets = ConsumeRecords(SocketTraceConnector::kDNSTableNum);
-  ASSERT_FALSE(tablets.empty());
-
-  types::ColumnWrapperRecordBatch rb = tablets[0].records;
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& rb, tablets);
   PL_LOG_VAR(PrintDNSTable(rb));
 
   // Check server-side.
@@ -82,7 +80,7 @@ TEST_F(DNSTraceTest, Capture) {
     types::ColumnWrapperRecordBatch records =
         FindRecordsMatchingPID(tablets[0].records, kDNSUPIDIdx, container_.process_pid());
 
-    ASSERT_THAT(records, Each(ColWrapperSizeIs(1)));
+    ASSERT_THAT(records, RecordBatchSizeIs(1));
 
     const std::string& req_hdr = records[kDNSReqHdrIdx]->Get<types::StringValue>(0);
     const std::string& req_body = records[kDNSReqBodyIdx]->Get<types::StringValue>(0);

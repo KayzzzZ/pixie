@@ -105,16 +105,13 @@ TEST_P(NATSTraceBPFTest, VerifyBatchedCommands) {
 
   std::vector<TaggedRecordBatch> tablets = ConsumeRecords(SocketTraceConnector::kNATSTableNum);
 
-  ASSERT_FALSE(tablets.empty());
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& records, tablets);
 
-  const std::string connect_options =
-      absl::Substitute(R"({"verbose":false,"pedantic":false,"tls_required":$0,"name":"",)"
-                       R"("lang":"go","version":"1.10.0","protocol":1,"echo":true})",
-                       GetParam());
   EXPECT_THAT(
-      GetNATSTraceRecords(tablets[0].records, server_pid),
+      GetNATSTraceRecords(records, server_pid),
       UnorderedElementsAre(
-          EqualsNATSTraceRecord("CONNECT", connect_options, ""),
+          EqualsNATSTraceRecord("CONNECT", absl::Substitute(R"("tls_required":$0)", GetParam()),
+                                ""),
           EqualsNATSTraceRecord("INFO", R"("host":"0.0.0.0","port":4222,"headers":true)", ""),
           EqualsNATSTraceRecord("SUB", R"({"sid":"1","subject":"foo"})", ""),
           EqualsNATSTraceRecord("MSG", R"({"payload":"Hello World","sid":"1","subject":"foo"})",

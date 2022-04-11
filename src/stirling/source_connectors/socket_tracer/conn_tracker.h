@@ -48,6 +48,7 @@ DECLARE_int64(stirling_conn_trace_pid);
 DECLARE_int64(stirling_conn_trace_fd);
 DECLARE_bool(stirling_conn_disable_to_bpf);
 DECLARE_int64(stirling_check_proc_for_conn_close);
+DECLARE_int64(stirling_untracked_upid_threshold_seconds);
 
 #define CONN_TRACE(level) LOG_IF(INFO, level <= debug_trace_level_) << ToString() << " "
 
@@ -267,14 +268,14 @@ class ConnTracker : NotCopyMoveable {
     auto& resp_frames = resp_data()->Frames<TFrameType>();
     auto state_ptr = protocol_state<TStateType>();
 
-    CONN_TRACE(1) << absl::Substitute("req_frames=$0 resp_frames=$1", req_frames.size(),
+    CONN_TRACE(2) << absl::Substitute("req_frames=$0 resp_frames=$1", req_frames.size(),
                                       resp_frames.size());
 
     protocols::RecordsWithErrorCount<TRecordType> result =
         protocols::StitchFrames<TRecordType, TFrameType, TStateType>(&req_frames, &resp_frames,
                                                                      state_ptr);
 
-    CONN_TRACE(1) << absl::Substitute("records=$0", result.records.size());
+    CONN_TRACE(2) << absl::Substitute("records=$0", result.records.size());
 
     UpdateResultStats(result);
 
@@ -320,8 +321,6 @@ class ConnTracker : NotCopyMoveable {
 
   /**
    * Get remote IP endpoint of the connection.
-   *
-   * @return IP.
    */
   const SockAddr& remote_endpoint() const { return open_info_.remote_addr; }
 
@@ -329,15 +328,11 @@ class ConnTracker : NotCopyMoveable {
 
   /**
    * Get the connection information (e.g. remote IP, port, PID, etc.) for this connection.
-   *
-   * @return connection information.
    */
   const SocketOpen& conn() const { return open_info_; }
 
   /**
    * Get the DataStream of sent frames for this connection.
-   *
-   * @return Data stream of send data.
    */
   const DataStream& send_data() const { return send_data_; }
   // Mutable version of the above, for testing purposes.
@@ -345,8 +340,6 @@ class ConnTracker : NotCopyMoveable {
 
   /**
    * Get the DataStream of received frames for this connection.
-   *
-   * @return Data stream of received data.
    */
   const DataStream& recv_data() const { return recv_data_; }
   // Mutable version of the above, for testing purposes.
@@ -354,15 +347,11 @@ class ConnTracker : NotCopyMoveable {
 
   /**
    * Get the DataStream of requests for this connection.
-   *
-   * @return Data stream of requests.
    */
   DataStream* req_data();
 
   /**
    * Get the DataStream of responses for this connection.
-   *
-   * @return Data stream of responses.
    */
   DataStream* resp_data();
 
@@ -378,6 +367,13 @@ class ConnTracker : NotCopyMoveable {
    */
   std::chrono::time_point<std::chrono::steady_clock> last_update_timestamp() {
     return last_activity_timestamp_;
+  }
+
+  /**
+   * Returns the timestamp when this ConnTracker was created..
+   */
+  std::chrono::time_point<std::chrono::steady_clock> creation_timestamp() {
+    return creation_timestamp_;
   }
 
   /**
@@ -439,8 +435,10 @@ class ConnTracker : NotCopyMoveable {
   bool ReadyForDestruction() const;
 
   void set_current_time(std::chrono::time_point<std::chrono::steady_clock> time) {
-    DCHECK(time >= current_time_);
+    ECHECK(time >= current_time_);
     current_time_ = time;
+    recv_data_.set_current_time(time);
+    send_data_.set_current_time(time);
 
     // If there's no previous activity, set to current time.
     if (last_activity_timestamp_.time_since_epoch().count() == 0) {
@@ -592,6 +590,9 @@ class ConnTracker : NotCopyMoveable {
     }
   }
 
+  void set_is_tracked_upid() { is_tracked_upid_ = true; }
+  bool is_tracked_upid() const { return is_tracked_upid_; }
+
   template <typename TProtocolTraits>
   size_t MemUsage() const {
     using TFrameType = typename TProtocolTraits::frame_type;
@@ -636,8 +637,8 @@ class ConnTracker : NotCopyMoveable {
   // made. Note that since there is only one global BPF map, this is a static/global structure.
   inline static std::shared_ptr<ConnInfoMapManager> conn_info_map_mgr_;
 
-  void AddConnOpenEvent(const conn_event_t& conn_info, uint64_t timestamp_ns);
-  void AddConnCloseEvent(const close_event_t& close_event, uint64_t timestamp_ns);
+  void AddConnOpenEvent(const socket_control_event_t& conn_info);
+  void AddConnCloseEvent(const socket_control_event_t& close_event);
 
   void UpdateTimestamps(uint64_t bpf_timestamp);
 
@@ -680,6 +681,10 @@ class ConnTracker : NotCopyMoveable {
 
   struct conn_id_t conn_id_ = {};
 
+  // Specifies whether this is a UPID currently (or previously) in the ConnectorContext UPIDs.
+  // Used to disable ConnTrackers that are not part of the context.
+  bool is_tracked_upid_ = false;
+
   traffic_protocol_t protocol_ = kProtocolUnknown;
   endpoint_role_t role_ = kRoleUnknown;
   bool ssl_ = false;
@@ -701,10 +706,18 @@ class ConnTracker : NotCopyMoveable {
   // Access the appropriate HalfStream object for the given stream ID.
   protocols::http2::HalfStream* HalfStreamPtr(uint32_t stream_id, bool write_event);
 
+  // The timestamp when this conn tracker was created,
+  // using the TSID of the conn ID (which means the first time this conn was detected in BPF).
+  std::chrono::time_point<std::chrono::steady_clock> creation_timestamp_ = {};
+
   // The timestamp of the last activity on this connection.
   // Recorded as the latest timestamp on a BPF event.
   uint64_t last_bpf_timestamp_ns_ = 0;
 
+  // The current_time_ is the time the tracker should assume to be "now" during its processing.
+  // The value is set by set_current_time().
+  // This approach helps to avoid repeated calls to get the clock, and improves testability.
+  // In the context of the SocketTracer, the current time is set at beginning of each iteration.
   std::chrono::time_point<std::chrono::steady_clock> current_time_;
 
   // The timestamp of the last update on this connection which alters the states.

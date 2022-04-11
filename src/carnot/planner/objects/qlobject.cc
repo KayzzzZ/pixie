@@ -41,6 +41,13 @@ void QLObject::AddSubscriptMethod(std::shared_ptr<FuncObject> func_object) {
 
 StatusOr<std::shared_ptr<QLObject>> QLObject::GetAttribute(const pypa::AstPtr& ast,
                                                            std::string_view attr) const {
+  PL_ASSIGN_OR_RETURN(auto object, GetAttributeInternal(ast, attr));
+  object->SetAst(ast);
+  return object;
+}
+
+StatusOr<std::shared_ptr<QLObject>> QLObject::GetAttributeInternal(const pypa::AstPtr& ast,
+                                                                   std::string_view attr) const {
   if (HasMethod(attr)) {
     return GetMethod(attr);
   }
@@ -54,7 +61,7 @@ Status QLObject::AssignAttribute(std::string_view attr_name, QLObjectPtr object)
   if (!CanAssignAttribute(attr_name)) {
     return CreateError("Cannot assign attribute $0 to object of type $1", attr_name, name());
   }
-  attributes_[attr_name] = object;
+  attributes_[attr_name] = std::move(object);
   return Status::OK();
 }
 
@@ -70,18 +77,7 @@ StatusOr<QLObjectPtr> QLObject::FromIRNode(IRNode* node, ASTVisitor* ast_visitor
 }
 
 Status QLObject::SetDocString(const std::string& doc_string) {
-  // TODO(PP-2142) Support non ExprObject nodes to pass strings around so we can
-  // store it in __doc__.
   doc_string_ = doc_string;
-  return Status::OK();
-}
-
-Status QLObject::SetDocString(QLObjectPtr doc_string) {
-  // TODO(PP-2142) Redo the doc_string requirements so StringIR isn't a requirement.
-  PL_RETURN_IF_ERROR(AssignAttribute(kDocStringAttributeName, doc_string));
-  DCHECK(doc_string->HasNode());
-  DCHECK_EQ(doc_string->node()->type(), IRNodeType::kString);
-  doc_string_ = static_cast<StringIR*>(doc_string->node())->str();
   return Status::OK();
 }
 

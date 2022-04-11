@@ -70,6 +70,8 @@ DECLARE_uint32(messages_size_limit_bytes);
 DECLARE_uint32(datastream_buffer_expiry_duration_secs);
 DECLARE_uint32(datastream_buffer_retention_size);
 
+DECLARE_uint64(max_body_bytes);
+
 namespace px {
 namespace stirling {
 
@@ -134,6 +136,10 @@ class SocketTraceConnector : public SourceConnector, public bpf_tools::BCCWrappe
     return conn_trackers_mgr_.GetConnTracker(pid, fd);
   }
 
+  void test_only_set_now_fn(std::function<std::chrono::steady_clock::time_point()> now_fn) {
+    now_fn_ = now_fn;
+  }
+
  private:
   // ReadPerfBuffers poll callback functions (must be static).
   // These are used by the static variables below, and have to be placed here.
@@ -147,13 +153,6 @@ class SocketTraceConnector : public SourceConnector, public bpf_tools::BCCWrappe
   static void HandleMMapEventLoss(void* cb_cookie, uint64_t lost);
   static void HandleHTTP2Event(void* cb_cookie, void* data, int data_size);
   static void HandleHTTP2EventLoss(void* cb_cookie, uint64_t lost);
-
-  // Most HTTP servers support 8K headers, so we truncate after that.
-  // https://stackoverflow.com/questions/686217/maximum-on-http-header-values
-  inline static constexpr size_t kMaxHTTPHeadersBytes = 8192;
-
-  // Protobuf printer will limit strings to this length.
-  inline static constexpr size_t kMaxPBStringLen = 64;
 
   explicit SocketTraceConnector(std::string_view source_name);
 
@@ -199,6 +198,8 @@ class SocketTraceConnector : public SourceConnector, public bpf_tools::BCCWrappe
   ConnStats conn_stats_;
 
   absl::flat_hash_set<int> pids_to_trace_disable_;
+
+  std::function<std::chrono::steady_clock::time_point()> now_fn_ = std::chrono::steady_clock::now;
 
   struct TransferSpec {
     // TODO(yzhao): Enabling protocol is essentially equivalent to subscribing to DataTable. They

@@ -184,6 +184,8 @@ class GetTableSchemas final : public carnot::udf::UDTF<GetTableSchemas> {
                              "The name of the column"),
                      ColInfo("column_type", types::DataType::STRING, types::PatternType::GENERAL,
                              "The type of the column"),
+                     ColInfo("pattern_type", types::DataType::STRING, types::PatternType::GENERAL,
+                             "The pattern type of the metric"),
                      ColInfo("column_desc", types::DataType::STRING, types::PatternType::GENERAL,
                              "Description of the column"));
   }
@@ -204,9 +206,9 @@ class GetTableSchemas final : public carnot::udf::UDTF<GetTableSchemas> {
     // a single invocation.
     for (const auto& [table_name, rel] : resp.schema().relation_map()) {
       for (const auto& col : rel.columns()) {
-        relation_info_.emplace_back(table_name, col.column_name(),
-                                    std::string(magic_enum::enum_name(col.column_type())),
-                                    col.column_desc());
+        relation_info_.emplace_back(
+            table_name, col.column_name(), std::string(magic_enum::enum_name(col.column_type())),
+            std::string(types::ToString(col.pattern_type())), col.column_desc());
       }
     }
     return Status::OK();
@@ -220,6 +222,7 @@ class GetTableSchemas final : public carnot::udf::UDTF<GetTableSchemas> {
     rw->Append<IndexOf("table_name")>(r.table_name);
     rw->Append<IndexOf("column_name")>(r.column_name);
     rw->Append<IndexOf("column_type")>(r.column_type);
+    rw->Append<IndexOf("pattern_type")>(r.pattern_type);
     rw->Append<IndexOf("column_desc")>(r.column_desc);
 
     idx_++;
@@ -229,14 +232,17 @@ class GetTableSchemas final : public carnot::udf::UDTF<GetTableSchemas> {
  private:
   struct RelationInfo {
     RelationInfo(const std::string& table_name, const std::string& column_name,
-                 const std::string& column_type, const std::string& column_desc)
+                 const std::string& column_type, const std::string& pattern_type,
+                 const std::string& column_desc)
         : table_name(table_name),
           column_name(column_name),
           column_type(column_type),
+          pattern_type(pattern_type),
           column_desc(column_desc) {}
     std::string table_name;
     std::string column_name;
     std::string column_type;
+    std::string pattern_type;
     std::string column_desc;
   };
 
@@ -661,7 +667,10 @@ class GetDebugTableInfo final : public carnot::udf::UDTF<GetDebugTableInfo> {
         ColInfo("cold_size", types::DataType::INT64, types::PatternType::GENERAL,
                 "The number of bytes in cold storage"),
         ColInfo("max_table_size", types::DataType::INT64, types::PatternType::GENERAL,
-                "The maximum size of this table"));
+                "The maximum size of this table"),
+        ColInfo("min_time", types::DataType::TIME64NS, types::PatternType::GENERAL,
+                "The minimum timestamp currently present in this table. -1 if there is no time_ "
+                "column on the table."));
   }
   Status Init(FunctionContext*) {
     table_ids_ = table_store_->GetTableIDs();
@@ -687,6 +696,7 @@ class GetDebugTableInfo final : public carnot::udf::UDTF<GetDebugTableInfo> {
     rw->Append<IndexOf("size")>(info.bytes);
     rw->Append<IndexOf("cold_size")>(info.cold_bytes);
     rw->Append<IndexOf("max_table_size")>(info.max_table_size);
+    rw->Append<IndexOf("min_time")>(info.min_time);
 
     ++current_idx_;
     return static_cast<size_t>(current_idx_) < table_ids_.size();

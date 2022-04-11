@@ -461,6 +461,7 @@ func TestServer_VizierConnectedHealthy(t *testing.T) {
 	require.NotNil(t, resp)
 
 	assert.Equal(t, resp.Status, cvmsgspb.ST_OK)
+	assert.Equal(t, resp.VizierName, "healthy_cluster")
 
 	// Check to make sure DB insert for JWT signing key is correct.
 	clusterQuery := `SELECT PGP_SYM_DECRYPT(jwt_signing_key::bytea, 'test') as jwt_signing_key, status, vizier_version from vizier_cluster_info WHERE vizier_cluster_id=$1`
@@ -1058,10 +1059,12 @@ func TestServer_ProvisionOrClaimVizier(t *testing.T) {
 	userID := uuid.Must(uuid.NewV4())
 
 	// This should select the first cluster with an empty UID that is disconnected.
-	clusterID, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testAuthOrgID), userID, "my cluster", "")
+	clusterID, clusterName, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testAuthOrgID), userID, "my cluster", "")
 	require.NoError(t, err)
 	// Should select the disconnected cluster.
 	assert.Equal(t, testDisconnectedClusterEmptyUID, clusterID.String())
+	// Some random name should get assigned by the nameGenerator.
+	assert.NotEqual(t, "", clusterName)
 }
 
 func TestServer_ProvisionOrClaimVizierWIthExistingUID(t *testing.T) {
@@ -1105,19 +1108,11 @@ func TestServer_ProvisionOrClaimVizierWIthExistingUID(t *testing.T) {
 			userID := uuid.Must(uuid.NewV4())
 
 			// This should select the existing cluster with the same UID.
-			clusterID, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testAuthOrgID), userID, "existing_cluster", test.inputName)
+			clusterID, clusterName, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testAuthOrgID), userID, "existing_cluster", test.inputName)
 			require.NoError(t, err)
 			// Should select the disconnected cluster.
 			assert.Equal(t, testExistingCluster, clusterID.String())
-
-			// Check cluster name.
-			var clusterInfo struct {
-				ClusterName *string `db:"cluster_name"`
-			}
-			nameQuery := `SELECT cluster_name from vizier_cluster WHERE id=$1`
-			err = db.Get(&clusterInfo, nameQuery, clusterID)
-			require.NoError(t, err)
-			assert.Equal(t, *clusterInfo.ClusterName, test.expectedName)
+			assert.Equal(t, clusterName, test.expectedName)
 		})
 	}
 }
@@ -1128,10 +1123,11 @@ func TestServer_ProvisionOrClaimVizier_WithExistingActiveUID(t *testing.T) {
 	s := controllers.New(db, "test", nil, nil, nil)
 	userID := uuid.Must(uuid.NewV4())
 	// This should select cause an error b/c we are trying to provision a cluster that is not disconnected.
-	clusterID, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testAuthOrgID), userID, "my_other_cluster", "")
+	clusterID, clusterName, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testAuthOrgID), userID, "my_other_cluster", "")
 	assert.NotNil(t, err)
 	assert.Equal(t, vzerrors.ErrProvisionFailedVizierIsActive, err)
 	assert.Equal(t, uuid.Nil, clusterID)
+	assert.Equal(t, "", clusterName)
 }
 
 func TestServer_ProvisionOrClaimVizier_WithNewCluster(t *testing.T) {
@@ -1140,9 +1136,11 @@ func TestServer_ProvisionOrClaimVizier_WithNewCluster(t *testing.T) {
 	s := controllers.New(db, "test", nil, nil, nil)
 	userID := uuid.Must(uuid.NewV4())
 	// This should select cause an error b/c we are trying to provision a cluster that is not disconnected.
-	clusterID, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testNonAuthOrgID), userID, "my_other_cluster", "")
+	clusterID, clusterName, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testNonAuthOrgID), userID, "my_other_cluster", "")
 	require.NoError(t, err)
 	assert.NotEqual(t, uuid.Nil, clusterID)
+	// Some random name should get assigned by the nameGenerator.
+	assert.NotEqual(t, "", clusterName)
 }
 
 func TestServer_ProvisionOrClaimVizier_WithExistingName(t *testing.T) {
@@ -1152,16 +1150,19 @@ func TestServer_ProvisionOrClaimVizier_WithExistingName(t *testing.T) {
 	userID := uuid.Must(uuid.NewV4())
 
 	// This should select the existing cluster with the same UID.
-	clusterID, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testAuthOrgID), userID, "some_cluster", "test_cluster_1234\n")
+	clusterID, clusterName, err := s.ProvisionOrClaimVizier(context.Background(), uuid.FromStringOrNil(testAuthOrgID), userID, "some_cluster", "test_cluster_1234\n")
 	require.NoError(t, err)
 	// Should select the disconnected cluster.
 	assert.Equal(t, testDisconnectedClusterEmptyUID, clusterID.String())
-	// Check cluster name.
-	var clusterInfo struct {
-		ClusterName *string `db:"cluster_name"`
-	}
-	nameQuery := `SELECT cluster_name from vizier_cluster WHERE id=$1`
-	err = db.Get(&clusterInfo, nameQuery, clusterID)
+	assert.True(t, strings.HasPrefix(clusterName, "test_cluster_1234_"))
+}
+
+func TestServer_GetOrgFromVizier(t *testing.T) {
+	mustLoadTestData(db)
+
+	s := controllers.New(db, "test", nil, nil, nil)
+	resp, err := s.GetOrgFromVizier(CreateTestContext(), utils.ProtoFromUUIDStrOrNil("123e4567-e89b-12d3-a456-426655440000"))
 	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(*clusterInfo.ClusterName, "test_cluster_1234_"))
+	require.NotNil(t, resp)
+	assert.Equal(t, &vzmgrpb.GetOrgFromVizierResponse{OrgID: utils.ProtoFromUUIDStrOrNil(testAuthOrgID)}, resp)
 }

@@ -33,6 +33,8 @@
 #include "src/table_store/schema/relation.h"
 #include "src/table_store/table/table.h"
 
+// Note: this value is not used in most cases.
+// Check out PL_TABLE_STORE_DATA_LIMIT_MB to configure the table store size.
 DEFINE_int32(table_store_table_size_limit,
              gflags::Int32FromEnv("PL_TABLE_STORE_TABLE_SIZE_LIMIT", 1024 * 1024 * 64),
              "The maximal size a table allows. When the size grows beyond this limit, "
@@ -302,6 +304,18 @@ schema::Relation Table::GetRelation() const { return rel_; }
 TableStats Table::GetTableStats() const {
   TableStats info;
   auto num_batches = NumBatches();
+  int64_t min_time = -1;
+  {
+    absl::MutexLock cold_lock(&cold_lock_);
+    if (time_col_idx_ != -1 && !cold_time_.empty()) {
+      min_time = cold_time_[0].first;
+    } else {
+      absl::MutexLock hot_lock(&hot_lock_);
+      if (time_col_idx_ != -1 && !hot_time_.empty()) {
+        min_time = hot_time_[0].first;
+      }
+    }
+  }
   absl::base_internal::SpinLockHolder lock(&stats_lock_);
 
   info.batches_added = batches_added_;
@@ -311,6 +325,7 @@ TableStats Table::GetTableStats() const {
   info.cold_bytes = cold_bytes_;
   info.compacted_batches = compacted_batches_;
   info.max_table_size = max_table_size_;
+  info.min_time = min_time;
 
   return info;
 }

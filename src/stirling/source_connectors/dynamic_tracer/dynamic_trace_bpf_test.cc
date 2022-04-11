@@ -41,8 +41,9 @@ namespace px {
 namespace stirling {
 
 using ::google::protobuf::TextFormat;
-using ::px::stirling::testing::ColWrapperSizeIs;
+
 using ::px::stirling::testing::FindRecordsMatchingPID;
+using ::px::stirling::testing::RecordBatchSizeIs;
 using ::testing::Each;
 using ::testing::Ge;
 using ::testing::Gt;
@@ -61,7 +62,7 @@ class GoHTTPDynamicTraceTest : public ::testing::Test {
     ASSERT_TRUE(fs::Exists(server_path_));
     ASSERT_TRUE(fs::Exists(client_path_));
 
-    ASSERT_OK(s_.Start({server_path_}));
+    ASSERT_OK(s_.Start({server_path_, "--port=0"}));
 
     // Give some time for the server to start up.
     sleep(2);
@@ -177,13 +178,13 @@ TEST_F(GoHTTPDynamicTraceTest, TraceGolangHTTPClientAndServer) {
   ASSERT_NO_FATAL_FAILURE(InitTestFixturesAndRunTestProgram(kGRPCTraceProgram));
   std::vector<TaggedRecordBatch> tablets = GetRecords();
 
-  ASSERT_FALSE(tablets.empty());
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& record_batch, tablets);
 
   {
     types::ColumnWrapperRecordBatch records =
-        FindRecordsMatchingPID(tablets[0].records, /*index*/ 0, s_.child_pid());
+        FindRecordsMatchingPID(record_batch, /*index*/ 0, s_.child_pid());
 
-    ASSERT_THAT(records, Each(ColWrapperSizeIs(10)));
+    ASSERT_THAT(records, RecordBatchSizeIs(10));
 
     constexpr size_t kStreamIDIdx = 3;
     constexpr size_t kEndStreamIdx = 4;
@@ -201,13 +202,13 @@ TEST_F(GoHTTPDynamicTraceTest, TraceReturnValue) {
   ASSERT_NO_FATAL_FAILURE(InitTestFixturesAndRunTestProgram(kReturnValueTraceProgram));
   std::vector<TaggedRecordBatch> tablets = GetRecords();
 
-  ASSERT_FALSE(tablets.empty());
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& record_batch, tablets);
 
   {
     types::ColumnWrapperRecordBatch records =
-        FindRecordsMatchingPID(tablets[0].records, /*index*/ 0, s_.child_pid());
+        FindRecordsMatchingPID(record_batch, /*index*/ 0, s_.child_pid());
 
-    ASSERT_THAT(records, Each(ColWrapperSizeIs(80)));
+    ASSERT_THAT(records, RecordBatchSizeIs(80));
 
     constexpr size_t kFrameHeaderValidIdx = 3;
 

@@ -24,8 +24,13 @@ import (
 
 	bindata "github.com/golang-migrate/migrate/source/go_bindata"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 
+	"px.dev/pixie/src/cloud/cron_script/cronscriptpb"
+	"px.dev/pixie/src/cloud/plugin/controllers"
+	"px.dev/pixie/src/cloud/plugin/pluginpb"
 	"px.dev/pixie/src/cloud/plugin/schema"
 	"px.dev/pixie/src/cloud/shared/pgmigrate"
 	"px.dev/pixie/src/shared/services"
@@ -34,6 +39,25 @@ import (
 	"px.dev/pixie/src/shared/services/pg"
 	"px.dev/pixie/src/shared/services/server"
 )
+
+func init() {
+	pflag.String("cron_script_service", "cron-script-service.plc.svc.cluster.local:50700", "The cronscript service url (load balancer/list is ok)")
+}
+
+// NewCronScriptServiceClient creates a new cron script service RPC client stub.
+func NewCronScriptServiceClient() (cronscriptpb.CronScriptServiceClient, error) {
+	dialOpts, err := services.GetGRPCClientDialOpts()
+	if err != nil {
+		return nil, err
+	}
+
+	csChannel, err := grpc.Dial(viper.GetString("cron_script_service"), dialOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return cronscriptpb.NewCronScriptServiceClient(csChannel), nil
+}
 
 func main() {
 	services.SetupService("plugin-service", 50600)
@@ -53,7 +77,21 @@ func main() {
 		log.WithError(err).Fatal("Failed to apply migrations")
 	}
 
+	dbKey := viper.GetString("database_key")
+	if dbKey == "" {
+		log.Fatal("Database encryption key is required")
+	}
+
 	s := server.NewPLServer(env.New(viper.GetString("domain_name")), mux)
+
+	csClient, err := NewCronScriptServiceClient()
+	if err != nil {
+		log.Fatal("Failed to start cronscript client")
+	}
+	c := controllers.New(db, dbKey, csClient)
+
+	pluginpb.RegisterPluginServiceServer(s.GRPCServer(), c)
+	pluginpb.RegisterDataRetentionPluginServiceServer(s.GRPCServer(), c)
 
 	s.Start()
 	s.StopOnInterrupt()

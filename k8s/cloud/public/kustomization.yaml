@@ -23,6 +23,7 @@ resources:
 - ../base
 - ../base/ory_auth
 - ../overlays/exposed_services_ilb
+- plugin_db_updater_job.yaml
 patchesStrategicMerge:
 - artifact_tracker_versions.yaml
 - domain_config.yaml
@@ -63,6 +64,9 @@ images:
   newTag: latest
 - name: gcr.io/pixie-oss/pixie-dev/cloud/scriptmgr_server_image
   newName: gcr.io/pixie-oss/pixie-prod/cloud/scriptmgr_server_image
+  newTag: latest
+- name: gcr.io/pixie-oss/pixie-dev/cloud/cron_script_server_image
+  newName: gcr.io/pixie-oss/pixie-prod/cloud/cron_script_server_image
   newTag: latest
 - name: gcr.io/pixie-oss/pixie-dev/cloud/vzconn_server_image
   newName: gcr.io/pixie-oss/pixie-prod/cloud/vzconn_server_image

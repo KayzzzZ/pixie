@@ -59,6 +59,26 @@ func (mr *MockVZMgrServiceClientMockRecorder) CreateVizierCluster(ctx, in interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVizierCluster", reflect.TypeOf((*MockVZMgrServiceClient)(nil).CreateVizierCluster), varargs...)
 }
 
+// GetOrgFromVizier mocks base method.
+func (m *MockVZMgrServiceClient) GetOrgFromVizier(ctx context.Context, in *uuidpb.UUID, opts ...grpc.CallOption) (*vzmgrpb.GetOrgFromVizierResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetOrgFromVizier", varargs...)
+	ret0, _ := ret[0].(*vzmgrpb.GetOrgFromVizierResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOrgFromVizier indicates an expected call of GetOrgFromVizier.
+func (mr *MockVZMgrServiceClientMockRecorder) GetOrgFromVizier(ctx, in interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgFromVizier", reflect.TypeOf((*MockVZMgrServiceClient)(nil).GetOrgFromVizier), varargs...)
+}
+
 // GetVizierConnectionInfo mocks base method.
 func (m *MockVZMgrServiceClient) GetVizierConnectionInfo(ctx context.Context, in *uuidpb.UUID, opts ...grpc.CallOption) (*cvmsgspb.VizierConnectionInfo, error) {
 	m.ctrl.T.Helper()
@@ -257,6 +277,21 @@ func (mr *MockVZMgrServiceServerMockRecorder) CreateVizierCluster(arg0, arg1 int
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVizierCluster", reflect.TypeOf((*MockVZMgrServiceServer)(nil).CreateVizierCluster), arg0, arg1)
 }
 
+// GetOrgFromVizier mocks base method.
+func (m *MockVZMgrServiceServer) GetOrgFromVizier(arg0 context.Context, arg1 *uuidpb.UUID) (*vzmgrpb.GetOrgFromVizierResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOrgFromVizier", arg0, arg1)
+	ret0, _ := ret[0].(*vzmgrpb.GetOrgFromVizierResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOrgFromVizier indicates an expected call of GetOrgFromVizier.
+func (mr *MockVZMgrServiceServerMockRecorder) GetOrgFromVizier(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgFromVizier", reflect.TypeOf((*MockVZMgrServiceServer)(nil).GetOrgFromVizier), arg0, arg1)
+}
+
 // GetVizierConnectionInfo mocks base method.
 func (m *MockVZMgrServiceServer) GetVizierConnectionInfo(arg0 context.Context, arg1 *uuidpb.UUID) (*cvmsgspb.VizierConnectionInfo, error) {
 	m.ctrl.T.Helper()
@@ -421,7 +456,7 @@ func (mr *MockVZDeploymentKeyServiceClientMockRecorder) Create(ctx, in interface
 }
 
 // Delete mocks base method.
-func (m *MockVZDeploymentKeyServiceClient) Delete(ctx context.Context, in *uuidpb.UUID, opts ...grpc.CallOption) (*types.Empty, error) {
+func (m *MockVZDeploymentKeyServiceClient) Delete(ctx context.Context, in *vzmgrpb.DeleteDeploymentKeyRequest, opts ...grpc.CallOption) (*types.Empty, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, in}
 	for _, a := range opts {
@@ -539,7 +574,7 @@ func (mr *MockVZDeploymentKeyServiceServerMockRecorder) Create(arg0, arg1 interf
 }
 
 // Delete mocks base method.
-func (m *MockVZDeploymentKeyServiceServer) Delete(arg0 context.Context, arg1 *uuidpb.UUID) (*types.Empty, error) {
+func (m *MockVZDeploymentKeyServiceServer) Delete(arg0 context.Context, arg1 *vzmgrpb.DeleteDeploymentKeyRequest) (*types.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", arg0, arg1)
 	ret0, _ := ret[0].(*types.Empty)

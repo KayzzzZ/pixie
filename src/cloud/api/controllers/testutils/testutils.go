@@ -30,6 +30,7 @@ import (
 	mock_artifacttrackerpb "px.dev/pixie/src/cloud/artifact_tracker/artifacttrackerpb/mock"
 	mock_auth "px.dev/pixie/src/cloud/auth/authpb/mock"
 	mock_configmanagerpb "px.dev/pixie/src/cloud/config_manager/configmanagerpb/mock"
+	mock_pluginpb "px.dev/pixie/src/cloud/plugin/pluginpb/mock"
 	mock_profilepb "px.dev/pixie/src/cloud/profile/profilepb/mock"
 	mock_vzmgrpb "px.dev/pixie/src/cloud/vzmgr/vzmgrpb/mock"
 )
@@ -44,6 +45,7 @@ type MockCloudClients struct {
 	MockOrg               *mock_cloudpb.MockOrganizationServiceServer
 	MockUser              *mock_cloudpb.MockUserServiceServer
 	MockAPIKey            *mock_cloudpb.MockAPIKeyManagerServer
+	MockPlugin            *mock_cloudpb.MockPluginServiceServer
 }
 
 // CreateTestGraphQLEnv creates a test graphql environment and mock clients.
@@ -57,6 +59,7 @@ func CreateTestGraphQLEnv(t *testing.T) (controllers.GraphQLEnv, *MockCloudClien
 	as := mock_cloudpb.NewMockAutocompleteServiceServer(ctrl)
 	os := mock_cloudpb.NewMockOrganizationServiceServer(ctrl)
 	us := mock_cloudpb.NewMockUserServiceServer(ctrl)
+	ps := mock_cloudpb.NewMockPluginServiceServer(ctrl)
 	gqlEnv := controllers.GraphQLEnv{
 		APIKeyMgr:             aps,
 		ArtifactTrackerServer: ats,
@@ -66,6 +69,7 @@ func CreateTestGraphQLEnv(t *testing.T) (controllers.GraphQLEnv, *MockCloudClien
 		AutocompleteServer:    as,
 		OrgServer:             os,
 		UserServer:            us,
+		PluginServer:          ps,
 	}
 	return gqlEnv, &MockCloudClients{
 		MockAPIKey:            aps,
@@ -76,19 +80,22 @@ func CreateTestGraphQLEnv(t *testing.T) (controllers.GraphQLEnv, *MockCloudClien
 		MockAutocomplete:      as,
 		MockOrg:               os,
 		MockUser:              us,
+		MockPlugin:            ps,
 	}, ctrl.Finish
 }
 
 // MockAPIClients is a struct containing all of the mock clients for the api env.
 type MockAPIClients struct {
-	MockAuth        *mock_auth.MockAuthServiceClient
-	MockProfile     *mock_profilepb.MockProfileServiceClient
-	MockOrg         *mock_profilepb.MockOrgServiceClient
-	MockVzDeployKey *mock_vzmgrpb.MockVZDeploymentKeyServiceClient
-	MockAPIKey      *mock_auth.MockAPIKeyServiceClient
-	MockVzMgr       *mock_vzmgrpb.MockVZMgrServiceClient
-	MockArtifact    *mock_artifacttrackerpb.MockArtifactTrackerClient
-	MockConfigMgr   *mock_configmanagerpb.MockConfigManagerServiceClient
+	MockAuth                *mock_auth.MockAuthServiceClient
+	MockProfile             *mock_profilepb.MockProfileServiceClient
+	MockOrg                 *mock_profilepb.MockOrgServiceClient
+	MockVzDeployKey         *mock_vzmgrpb.MockVZDeploymentKeyServiceClient
+	MockAPIKey              *mock_auth.MockAPIKeyServiceClient
+	MockVzMgr               *mock_vzmgrpb.MockVZMgrServiceClient
+	MockArtifact            *mock_artifacttrackerpb.MockArtifactTrackerClient
+	MockConfigMgr           *mock_configmanagerpb.MockConfigManagerServiceClient
+	MockPlugin              *mock_pluginpb.MockPluginServiceClient
+	MockDataRetentionPlugin *mock_pluginpb.MockDataRetentionPluginServiceClient
 }
 
 // CreateTestAPIEnv creates a test environment and mock clients.
@@ -106,19 +113,23 @@ func CreateTestAPIEnv(t *testing.T) (apienv.APIEnv, *MockAPIClients, func()) {
 	mockAPIKey := mock_auth.NewMockAPIKeyServiceClient(ctrl)
 	mockArtifactTrackerClient := mock_artifacttrackerpb.NewMockArtifactTrackerClient(ctrl)
 	mockConfigMgrClient := mock_configmanagerpb.NewMockConfigManagerServiceClient(ctrl)
-	apiEnv, err := apienv.New(mockAuthClient, mockProfileClient, mockOrgClient, mockVzDeployKey, mockAPIKey, mockVzMgrClient, mockArtifactTrackerClient, nil, mockConfigMgrClient)
+	mockPluginClient := mock_pluginpb.NewMockPluginServiceClient(ctrl)
+	mockRetentionClient := mock_pluginpb.NewMockDataRetentionPluginServiceClient(ctrl)
+	apiEnv, err := apienv.New(mockAuthClient, mockProfileClient, mockOrgClient, mockVzDeployKey, mockAPIKey, mockVzMgrClient, mockArtifactTrackerClient, nil, mockConfigMgrClient, mockPluginClient, mockRetentionClient)
 	if err != nil {
 		t.Fatal("failed to init api env")
 	}
 
 	return apiEnv, &MockAPIClients{
-		MockAuth:        mockAuthClient,
-		MockProfile:     mockProfileClient,
-		MockOrg:         mockOrgClient,
-		MockVzMgr:       mockVzMgrClient,
-		MockAPIKey:      mockAPIKey,
-		MockVzDeployKey: mockVzDeployKey,
-		MockArtifact:    mockArtifactTrackerClient,
-		MockConfigMgr:   mockConfigMgrClient,
+		MockAuth:                mockAuthClient,
+		MockProfile:             mockProfileClient,
+		MockOrg:                 mockOrgClient,
+		MockVzMgr:               mockVzMgrClient,
+		MockAPIKey:              mockAPIKey,
+		MockVzDeployKey:         mockVzDeployKey,
+		MockArtifact:            mockArtifactTrackerClient,
+		MockConfigMgr:           mockConfigMgrClient,
+		MockPlugin:              mockPluginClient,
+		MockDataRetentionPlugin: mockRetentionClient,
 	}, ctrl.Finish
 }

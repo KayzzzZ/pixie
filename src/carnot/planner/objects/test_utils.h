@@ -118,13 +118,51 @@ class QLObjectTest : public OperatorTests {
     udfspb::UDFInfo info_pb;
     CHECK(google::protobuf::TextFormat::MergeFromString(kRegistryInfoProto, &info_pb));
     PL_CHECK_OK(info->Init(info_pb));
-    compiler_state = std::make_shared<CompilerState>(std::make_unique<RelationMap>(), info.get(), 0,
-                                                     "result_addr");
-    // Graph is set in OperatorTests.
+    compiler_state = std::make_unique<CompilerState>(
+        std::make_unique<RelationMap>(), /* sensitive_columns */ SensitiveColumnMap{}, info.get(),
+        /* time_now */ 0,
+        /* max_output_rows_per_table */ 0, "result_addr", "result_ssl_targetname",
+        /* redaction_options */ RedactionOptions{}, nullptr, nullptr);
 
-    ast_visitor =
-        ASTVisitorImpl::Create(graph.get(), &dynamic_trace_, compiler_state.get(), &module_handler)
-            .ConsumeValueOrDie();
+    var_table = VarTable::Create();
+    ast_visitor = ASTVisitorImpl::Create(graph.get(), var_table, &mutations_ir_,
+                                         compiler_state.get(), &module_handler)
+                      .ConsumeValueOrDie();
+  }
+  /**
+   * @brief ParseScript takes a script and an initial variable state then parses
+   * and walks through the AST given this initial variable state, updating the state
+   * with whatever was walked through.
+   *
+   * If you're testing Objects, create a var_table, fill it with the object(s) you want
+   * to test, then write a script interacting with those objects and store the result
+   * into a variable.
+   *
+   * Then you can check if the ParseScript actually succeeds and what data is stored
+   * in the var table.
+   */
+  Status ParseScript(const std::shared_ptr<VarTable>& var_table, const std::string& script) {
+    Parser parser;
+    PL_ASSIGN_OR_RETURN(pypa::AstModulePtr ast, parser.Parse(script));
+
+    bool func_based_exec = false;
+    absl::flat_hash_set<std::string> reserved_names;
+    MutationsIR mutations_ir;
+    ModuleHandler module_handler;
+    PL_ASSIGN_OR_RETURN(
+        auto ast_walker,
+        ASTVisitorImpl::Create(graph.get(), var_table, &mutations_ir, compiler_state.get(),
+                               &module_handler, func_based_exec, reserved_names));
+
+    return ast_walker->ProcessModuleNode(ast);
+  }
+
+  StatusOr<QLObjectPtr> ParseExpression(const std::string& expr) {
+    std::string var = "sp";
+    std::string script =
+        absl::Substitute("$0 = $1", var, std::string(absl::StripLeadingAsciiWhitespace(expr)));
+    PL_RETURN_IF_ERROR(ParseScript(var_table, script));
+    return var_table->Lookup(var);
   }
 
   ArgMap MakeArgMap(const std::vector<std::pair<std::string, IRNode*>>& kwargs,
@@ -145,29 +183,12 @@ class QLObjectTest : public OperatorTests {
     return QLObject::FromIRNode(node, ast_visitor.get()).ConsumeValueOrDie();
   }
 
-  template <typename... Args>
-  std::shared_ptr<ListObject> MakeListObj(Args... nodes) {
-    std::vector<QLObjectPtr> objs;
-    for (const auto node : std::vector<IRNode*>{nodes...}) {
-      objs.push_back(ToQLObject(node));
-    }
-    return ListObject::Create(objs, ast_visitor.get()).ConsumeValueOrDie();
-  }
-
-  template <typename... Args>
-  std::shared_ptr<TupleObject> MakeTupleObj(Args... nodes) {
-    std::vector<QLObjectPtr> objs;
-    for (const auto node : std::vector<IRNode*>{nodes...}) {
-      objs.push_back(ToQLObject(node));
-    }
-    return TupleObject::Create(objs, ast_visitor.get()).ConsumeValueOrDie();
-  }
-
-  std::shared_ptr<CompilerState> compiler_state = nullptr;
+  std::unique_ptr<CompilerState> compiler_state = nullptr;
   std::shared_ptr<RegistryInfo> info = nullptr;
   std::shared_ptr<ASTVisitor> ast_visitor = nullptr;
   ModuleHandler module_handler;
-  MutationsIR dynamic_trace_;
+  MutationsIR mutations_ir_;
+  std::shared_ptr<VarTable> var_table;
 };
 
 StatusOr<QLObjectPtr> NoneObjectFunc(const pypa::AstPtr&, const ParsedArgs&, ASTVisitor* visitor) {

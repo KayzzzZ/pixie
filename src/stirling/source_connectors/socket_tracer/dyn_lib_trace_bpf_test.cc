@@ -42,7 +42,6 @@ namespace http = protocols::http;
 using ::px::operator<<;
 
 using ::px::stirling::testing::EqHTTPRecord;
-using ::px::stirling::testing::FindRecordIdxMatchesPID;
 using ::px::stirling::testing::GetTargetRecords;
 using ::px::stirling::testing::SocketTraceBPFTest;
 using ::px::stirling::testing::ToRecordVector;
@@ -154,8 +153,7 @@ TEST_F(DynLibTraceTest, TraceDynLoadedOpenSSL) {
     StopTransferDataThread();
 
     std::vector<TaggedRecordBatch> tablets = ConsumeRecords(SocketTraceConnector::kHTTPTableNum);
-    ASSERT_FALSE(tablets.empty());
-    types::ColumnWrapperRecordBatch record_batch = tablets[0].records;
+    ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& record_batch, tablets);
 
     // Inspect records for Debug.
     for (size_t i = 0; i < record_batch[0]->Size(); ++i) {

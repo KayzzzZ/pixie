@@ -23,7 +23,7 @@
 #include <vector>
 
 #include "src/carnot/planner/compiler_state/compiler_state.h"
-#include "src/carnot/planner/objects/funcobject.h"
+#include "src/carnot/planner/objects/qlobject.h"
 
 namespace px {
 namespace carnot {
@@ -53,6 +53,9 @@ class PixieModule : public QLObject {
   Writes the data to the output stream. Disabled if executing using Vis functions.
   If you want to still see data when using vis fucntions, use `px.debug`.
 
+  Examples:
+    px.display(df, 'http_data')
+
   :topic: dataframe_ops
 
   Args:
@@ -62,6 +65,22 @@ class PixieModule : public QLObject {
       suffix with `_1`, incrementing for every duplicate.
   )doc";
 
+  inline static constexpr char kExportOpID[] = "export";
+  inline static constexpr char kExportOpDocstring[] = R"doc(
+  Outputs the data from Pixie to the specific destination.
+
+  Writes the data to the specified output destination. For example, can be
+  used to specify an export to OpenTelemetry using the methods available in
+  `px.otel.trace` or `px.otel.metrics`.
+
+  :topic: dataframe_ops
+
+  Args:
+    out (px.DataFrame): The DataFrame to write out to the output stream.
+    export_spec (Exporter): The destination specification for the DataFrame data.
+
+  )doc";
+
   inline static constexpr char kDebugTablePrefix[] = "_";
   inline static constexpr char kDebugOpID[] = "debug";
   inline static constexpr char kDebugOpDocstring[] = R"doc(
@@ -69,6 +88,11 @@ class PixieModule : public QLObject {
 
   Writes the data to the output stream, prefixing the name with `_`. Unlike `px.display`
   if executing the script with Vis functions, this will still write to the output table.
+  Debug tables are displayed in the data drawer in the Live UI. To show / hide the data
+  drawer use cmd+d (Mac) or ctrl+d (Windows, Linux).
+
+  Examples:
+    px.debug(df, 'test_data')
 
   :topic: dataframe_ops
 
@@ -136,8 +160,8 @@ class PixieModule : public QLObject {
   unique PID and is a Pixie concept to ensure tracked processes are unique in time and across
   nodes.
 
-  Note: Creating this value from scratch might be very difficult, espeically given the nanosecond timestamp.
-  It's probably only useful if you find the UPID printed out as it's consitituent components.
+  Note: Creating this value from scratch might be very difficult, especially given the nanosecond timestamp.
+  It's probably only useful if you find the UPID printed out as it's constituent components.
 
   In most situations, you might find that `px.uint128` is a better option as we often render UPID as uuid.
 
@@ -202,10 +226,9 @@ class PixieModule : public QLObject {
   These values are displayed in the UI as a clickable link to execute that PxL script.
 
   Examples:
-    df.script = px.script_reference(df.namespace, 'px/namespace', {
-      'namespace': df.namespace,
-      'start_time': '-5m'
-    })
+    df.script = px.script_reference(df.namespace, 'px/namespace', {'namespace': df.namespace, 'start_time': '-5m'})
+
+  :topic: compile_time_fn
 
   Args:
     label (string): A value containing the label text for the output deep link.

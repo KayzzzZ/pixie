@@ -30,6 +30,7 @@
 #include "src/shared/types/column_wrapper.h"
 #include "src/shared/upid/upid.h"
 #include "src/stirling/core/data_table.h"
+#include "src/stirling/core/output.h"
 
 // A macro that sets a variable, but then restores it to its original value after the scope exits.
 // Useful for setting a flag for the duration of a test.
@@ -37,6 +38,10 @@
   auto var##__orig = var;          \
   DEFER(var = var##__orig);        \
   var = val;
+
+#define ASSERT_NOT_EMPTY_AND_GET_RECORDS(lhs, tablets) \
+  ASSERT_EQ(tablets.size(), 1);                        \
+  lhs = tablets[0].records;
 
 namespace px {
 
@@ -57,16 +62,26 @@ MATCHER_P(ColWrapperSizeIs, size, absl::Substitute("is a ColumnWrapper having $0
   return arg->Size() == static_cast<size_t>(size);
 }
 
+MATCHER_P(RecordBatchSizeIs, size, absl::Substitute("is a RecordBatch having $0 elements", size)) {
+  // Check consistency of record back. All columns should have the same size.
+  for (const auto& col : arg) {
+    CHECK_EQ(col->Size(), arg[0]->Size());
+  }
+
+  return !arg.empty() && arg[0]->Size() == static_cast<size_t>(size);
+}
+
 MATCHER(ColWrapperIsEmpty, "is an empty ColumnWrapper") { return arg->Empty(); }
 
-// Useful to prepare data tables for use with TransferData().
+// Create DataTable objects used by SocketConnector::TransferData() to write records to.
 class DataTables {
  public:
-  template <typename TArrayType>
-  explicit DataTables(const TArrayType& tables) {
+  template <size_t NumTableSchemas>
+  explicit DataTables(
+      const std::array<px::stirling::DataTableSchema, NumTableSchemas>& table_schemas) {
     uint64_t id = 0;
-    for (const DataTableSchema& table : tables) {
-      auto data_table = std::make_unique<DataTable>(id++, table);
+    for (const DataTableSchema& table_schema : table_schemas) {
+      auto data_table = std::make_unique<DataTable>(id++, table_schema);
       data_table_ptrs_.push_back(data_table.get());
       data_table_uptrs_.push_back(std::move(data_table));
     }
@@ -150,6 +165,36 @@ inline md::UPID PIDToUPID(pid_t pid) {
   system::ProcParser proc_parser(system::Config::GetInstance());
   return md::UPID{/*asid*/ 0, static_cast<uint32_t>(pid),
                   proc_parser.GetPIDStartTimeTicks(pid).ValueOrDie()};
+}
+
+// Returns a list of string representation of the records in the input data table.
+// The records in the data table is removed afterwards.
+inline std::string ExtractToString(const DataTableSchema& data_table_schema,
+                                   DataTable* data_table) {
+  std::vector<std::string> res;
+  std::vector<TaggedRecordBatch> tagged_record_batches = data_table->ConsumeRecords();
+  for (auto& tagged_record_batch : tagged_record_batches) {
+    types::ColumnWrapperRecordBatch batches{std::move(tagged_record_batch.records)};
+    auto lines = ToString(data_table_schema.ToProto(), batches);
+    res.insert(res.end(), std::make_move_iterator(lines.begin()),
+               std::make_move_iterator(lines.end()));
+  }
+  return absl::StrJoin(res, "\n");
+}
+
+// Returns a list of string representation of the records in the input data table.
+// The records in the data table is removed afterwards.
+inline types::ColumnWrapperRecordBatch ExtractRecordsMatchingPID(DataTable* data_table,
+                                                                 int upid_column_idx, int pid) {
+  types::ColumnWrapperRecordBatch res;
+  std::vector<TaggedRecordBatch> tagged_record_batches = data_table->ConsumeRecords();
+  for (auto& tagged_record_batch : tagged_record_batches) {
+    types::ColumnWrapperRecordBatch batches{std::move(tagged_record_batch.records)};
+    for (auto& record : FindRecordsMatchingPID(batches, upid_column_idx, pid)) {
+      res.push_back(std::move(record));
+    }
+  }
+  return res;
 }
 
 }  // namespace testing

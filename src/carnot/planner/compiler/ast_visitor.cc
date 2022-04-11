@@ -54,17 +54,26 @@ StatusOr<FuncIR::Op> ASTVisitorImpl::GetUnaryOp(const std::string& python_op,
 }
 
 StatusOr<std::shared_ptr<ASTVisitorImpl>> ASTVisitorImpl::Create(
-    IR* graph, MutationsIR* mutations, CompilerState* compiler_state, ModuleHandler* module_handler,
-    bool func_based_exec, const absl::flat_hash_set<std::string>& reserved_names,
+    IR* graph, std::shared_ptr<VarTable> var_table, MutationsIR* mutations,
+    CompilerState* compiler_state, ModuleHandler* module_handler, bool func_based_exec,
+    const absl::flat_hash_set<std::string>& reserved_names,
     const absl::flat_hash_map<std::string, std::string>& module_map) {
   std::shared_ptr<ASTVisitorImpl> ast_visitor = std::shared_ptr<ASTVisitorImpl>(
-      new ASTVisitorImpl(graph, mutations, compiler_state, VarTable::Create(), func_based_exec,
+      new ASTVisitorImpl(graph, mutations, compiler_state, var_table, func_based_exec,
                          reserved_names, module_handler, std::make_shared<udf::Registry>("udcf")));
 
   PL_RETURN_IF_ERROR(ast_visitor->InitGlobals());
   PL_RETURN_IF_ERROR(ast_visitor->SetupModules(module_map));
   builtins::RegisterMathOpsOrDie(ast_visitor->udf_registry_.get());
   return ast_visitor;
+}
+
+StatusOr<std::shared_ptr<ASTVisitorImpl>> ASTVisitorImpl::Create(
+    IR* graph, MutationsIR* mutations, CompilerState* compiler_state, ModuleHandler* module_handler,
+    bool func_based_exec, const absl::flat_hash_set<std::string>& reserved_names,
+    const absl::flat_hash_map<std::string, std::string>& module_map) {
+  return Create(graph, VarTable::Create(), mutations, compiler_state, module_handler,
+                func_based_exec, reserved_names, module_map);
 }
 
 std::shared_ptr<ASTVisitorImpl> ASTVisitorImpl::CreateChild() {
@@ -612,21 +621,15 @@ Status ASTVisitorImpl::DoesArgMatchAnnotation(QLObjectPtr ql_arg, QLObjectPtr an
     if (type_object->ObjectMatches(ql_arg)) {
       return Status::OK();
     }
-    if (!ql_arg->HasNode()) {
+
+    if (!ExprObject::IsExprObject(ql_arg)) {
       return ql_arg->CreateError("Expected '$0', received '$1'", type_object->TypeString(),
                                  QLObjectTypeString(ql_arg->type()));
     }
-    // TODO(philkuz) (PP-2217) clean up Type code.
-    auto arg = ql_arg->node();
-    if (!arg->IsExpression()) {
-      return arg->CreateIRNodeError("Expected '$0', received '$1'", type_object->TypeString(),
-                                    arg->type_string());
-    }
-    return type_object->NodeMatches(static_cast<ExpressionIR*>(arg));
+    return type_object->NodeMatches(static_cast<ExprObject*>(ql_arg.get())->expr());
   } else if (annotation_obj->type() != ql_arg->type()) {
-    auto arg = ql_arg->node();
-    return arg->CreateIRNodeError("Expected '$0', received '$1'", annotation_obj->name(),
-                                  ql_arg->name());
+    return ql_arg->CreateError("Expected '$0', received '$1'", annotation_obj->name(),
+                               ql_arg->name());
   }
   return Status::OK();
 }
@@ -728,7 +731,8 @@ Status ASTVisitorImpl::ProcessFunctionDefNode(const pypa::AstFunctionDefPtr& nod
     PL_ASSIGN_OR_RETURN(defined_func, GetCallMethod(d, object_fn));
   }
 
-  PL_ASSIGN_OR_RETURN(auto doc_string, ProcessFuncDefDocString(body));
+  PL_ASSIGN_OR_RETURN(auto doc_string_obj, ProcessFuncDefDocString(body));
+  PL_ASSIGN_OR_RETURN(auto doc_string, GetAsString(doc_string_obj));
   PL_RETURN_IF_ERROR(defined_func->SetDocString(doc_string));
 
   PL_RETURN_IF_ERROR(defined_func->ResolveArgAnnotationsToTypes(arg_annotations_objs));
@@ -836,20 +840,8 @@ StatusOr<QLObjectPtr> ASTVisitorImpl::LookupVariable(const pypa::AstPtr& ast,
   if (var == nullptr) {
     return CreateAstError(ast, "name '$0' is not defined", name);
   }
+  var->SetAst(ast);
   return var;
-}
-
-StatusOr<OperatorIR*> ASTVisitorImpl::LookupName(const pypa::AstNamePtr& name_node) {
-  PL_ASSIGN_OR_RETURN(QLObjectPtr pyobject, LookupVariable(name_node));
-  if (!pyobject->HasNode()) {
-    return CreateAstError(name_node, "'$0' not accessible", name_node->id);
-  }
-  IRNode* node = pyobject->node();
-  if (!node->IsOperator()) {
-    return node->CreateIRNodeError("Only dataframes may be assigned variables, $0 not allowed",
-                                   node->type_string());
-  }
-  return static_cast<OperatorIR*>(node);
 }
 
 StatusOr<QLObjectPtr> ASTVisitorImpl::ProcessAttribute(const pypa::AstAttributePtr& node,
@@ -872,10 +864,15 @@ StatusOr<QLObjectPtr> ASTVisitorImpl::ProcessCallNode(const pypa::AstCallPtr& no
   // pyobject declared up here because we need this object to be allocated when
   // func_object->Call() is made.
   PL_ASSIGN_OR_RETURN(QLObjectPtr pyobject, Process(node->function, op_context));
-  if (pyobject->type_descriptor().type() == QLObjectType::kExpr) {
-    if (Match(pyobject->node(), ColumnNode())) {
+  if (ExprObject::IsExprObject(pyobject)) {
+    auto expr = static_cast<ExprObject*>(pyobject.get());
+    // TODO(philkuz) Look into pushing column resolution earlier to avoid this messiness.
+    // if we can know all the columns in the DataFrame at init, this would
+    // not exist. Otherwise, we treat any attribute of the DataFrame that doesn't exist
+    // as a ColumnNode.
+    if (Match(expr->expr(), ColumnNode())) {
       return CreateAstError(node, "dataframe has no method '$0'",
-                            static_cast<ColumnIR*>(pyobject->node())->col_name());
+                            static_cast<ColumnIR*>(expr->expr())->col_name());
     }
     return CreateAstError(node, "expression object is not callable");
   }
@@ -905,14 +902,14 @@ StatusOr<QLObjectPtr> ASTVisitorImpl::ProcessList(const pypa::AstListPtr& ast,
                                                   const OperatorContext& op_context) {
   PL_ASSIGN_OR_RETURN(std::vector<QLObjectPtr> expr_vec,
                       ProcessCollectionChildren(ast->elements, op_context));
-  return ListObject::Create(expr_vec, this);
+  return ListObject::Create(ast, expr_vec, this);
 }
 
 StatusOr<QLObjectPtr> ASTVisitorImpl::ProcessTuple(const pypa::AstTuplePtr& ast,
                                                    const OperatorContext& op_context) {
   PL_ASSIGN_OR_RETURN(std::vector<QLObjectPtr> expr_vec,
                       ProcessCollectionChildren(ast->elements, op_context));
-  return TupleObject::Create(expr_vec, this);
+  return TupleObject::Create(ast, expr_vec, this);
 }
 
 StatusOr<QLObjectPtr> ASTVisitorImpl::ProcessNumber(const pypa::AstNumberPtr& node) {
@@ -1098,7 +1095,7 @@ StatusOr<QLObjectPtr> ASTVisitorImpl::ProcessDict(const pypa::AstDictPtr& node,
     PL_ASSIGN_OR_RETURN(auto value_obj, Process(value, op_context));
     values.push_back(value_obj);
   }
-  return DictObject::Create(keys, values, this);
+  return DictObject::Create(node, keys, values, this);
 }
 
 StatusOr<QLObjectPtr> ASTVisitorImpl::ProcessDataUnaryOp(const pypa::AstUnaryOpPtr& node,

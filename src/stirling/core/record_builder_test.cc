@@ -26,7 +26,7 @@
 namespace px {
 namespace stirling {
 
-using ::px::stirling::testing::ColWrapperSizeIs;
+using ::px::stirling::testing::RecordBatchSizeIs;
 using ::testing::Each;
 using ::testing::ElementsAre;
 using ::testing::EndsWith;
@@ -50,15 +50,15 @@ TEST(RecordBuilder, StringMaxSize) {
   std::string kExpectedString(kMaxStringBytes, 'c');
 
   DataTable::RecordBuilder<&kTableSchema> r(&data_table);
-  r.Append<r.ColIndex("a"), kMaxStringBytes>(1);
-  r.Append<r.ColIndex("b"), kMaxStringBytes>("foo");
-  r.Append<r.ColIndex("c"), kMaxStringBytes>(kLargeString);
+  r.Append<r.ColIndex("a")>(1, kMaxStringBytes);
+  r.Append<r.ColIndex("b")>("foo", kMaxStringBytes);
+  r.Append<r.ColIndex("c")>(kLargeString, kMaxStringBytes);
 
   std::vector<TaggedRecordBatch> tablets = data_table.ConsumeRecords();
   ASSERT_EQ(tablets.size(), 1);
   types::ColumnWrapperRecordBatch& record_batch = tablets[0].records;
 
-  ASSERT_THAT(record_batch, Each(ColWrapperSizeIs(1)));
+  ASSERT_THAT(record_batch, RecordBatchSizeIs(1));
 
   EXPECT_THAT(record_batch[2]->Get<types::StringValue>(0), StartsWith(kExpectedString));
   EXPECT_THAT(record_batch[2]->Get<types::StringValue>(0), EndsWith("[TRUNCATED]"));
@@ -112,15 +112,15 @@ TEST(DynamicRecordBuilder, StringMaxSize) {
   std::string kExpectedString(kMaxStringBytes, 'c');
 
   DataTable::DynamicRecordBuilder r(&data_table);
-  r.Append<types::Int64Value, kMaxStringBytes>(0, 1);
-  r.Append<types::StringValue, kMaxStringBytes>(1, "foo");
-  r.Append<types::StringValue, kMaxStringBytes>(2, kLargeString);
+  r.Append<types::Int64Value>(0, 1, kMaxStringBytes);
+  r.Append<types::StringValue>(1, "foo", kMaxStringBytes);
+  r.Append<types::StringValue>(2, kLargeString, kMaxStringBytes);
 
   std::vector<TaggedRecordBatch> tablets = data_table.ConsumeRecords();
   ASSERT_EQ(tablets.size(), 1);
   types::ColumnWrapperRecordBatch& record_batch = tablets[0].records;
 
-  ASSERT_THAT(record_batch, Each(ColWrapperSizeIs(1)));
+  ASSERT_THAT(record_batch, RecordBatchSizeIs(1));
 
   EXPECT_THAT(record_batch[2]->Get<types::StringValue>(0), StartsWith(kExpectedString));
   EXPECT_THAT(record_batch[2]->Get<types::StringValue>(0), EndsWith("[TRUNCATED]"));

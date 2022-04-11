@@ -44,9 +44,11 @@ class ExprObject : public QLObject {
     return std::shared_ptr<ExprObject>(new ExprObject(expr, visitor));
   }
 
+  ExpressionIR* expr() { return expr_; }
+
   std::string name() const override {
-    if (node()->type() != IRNodeType::kFunc) {
-      return node()->type_string();
+    if (expr_->type() != IRNodeType::kFunc) {
+      return expr_->type_string();
     }
     return "FuncCall";
   }
@@ -55,8 +57,14 @@ class ExprObject : public QLObject {
   }
 
  protected:
-  ExprObject(ExpressionIR* expr, ASTVisitor* visitor) : QLObject(ExprType, expr, visitor) {}
+  ExprObject(ExpressionIR* expr, ASTVisitor* visitor)
+      : QLObject(ExprType, expr->ast(), visitor), expr_(expr) {}
+
+ private:
+  ExpressionIR* expr_;
 };
+
+StatusOr<std::string> GetAsString(const QLObjectPtr& obj);
 
 }  // namespace compiler
 }  // namespace planner

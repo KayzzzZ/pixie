@@ -561,16 +561,17 @@ func generateVizierYAMLsConfig(ctx context.Context, ns string, vz *v1alpha1.Vizi
 	req := &cloudpb.ConfigForVizierRequest{
 		Namespace: ns,
 		VzSpec: &vizierconfigpb.VizierSpec{
-			Version:           vz.Spec.Version,
-			DeployKey:         vz.Spec.DeployKey,
-			DisableAutoUpdate: vz.Spec.DisableAutoUpdate,
-			UseEtcdOperator:   vz.Spec.UseEtcdOperator,
-			ClusterName:       vz.Spec.ClusterName,
-			CloudAddr:         vz.Spec.CloudAddr,
-			DevCloudNamespace: vz.Spec.DevCloudNamespace,
-			PemMemoryLimit:    vz.Spec.PemMemoryLimit,
-			ClockConverter:    string(vz.Spec.ClockConverter),
-			DataAccess:        string(vz.Spec.DataAccess),
+			Version:               vz.Spec.Version,
+			DeployKey:             vz.Spec.DeployKey,
+			CustomDeployKeySecret: vz.Spec.CustomDeployKeySecret,
+			DisableAutoUpdate:     vz.Spec.DisableAutoUpdate,
+			UseEtcdOperator:       vz.Spec.UseEtcdOperator,
+			ClusterName:           vz.Spec.ClusterName,
+			CloudAddr:             vz.Spec.CloudAddr,
+			DevCloudNamespace:     vz.Spec.DevCloudNamespace,
+			PemMemoryLimit:        vz.Spec.PemMemoryLimit,
+			ClockConverter:        string(vz.Spec.ClockConverter),
+			DataAccess:            string(vz.Spec.DataAccess),
 			Pod_Policy: &vizierconfigpb.PodPolicyReq{
 				Labels:      vz.Spec.Pod.Labels,
 				Annotations: vz.Spec.Pod.Annotations,
@@ -588,7 +589,6 @@ func generateVizierYAMLsConfig(ctx context.Context, ns string, vz *v1alpha1.Vizi
 		req.VzSpec.DataCollectorParams = &vizierconfigpb.DataCollectorParams{
 			DatastreamBufferSize:      vz.Spec.DataCollectorParams.DatastreamBufferSize,
 			DatastreamBufferSpikeSize: vz.Spec.DataCollectorParams.DatastreamBufferSpikeSize,
-			TableStoreTableSizeLimit:  vz.Spec.DataCollectorParams.TableStoreTableSizeLimit,
 			CustomPEMFlags:            vz.Spec.DataCollectorParams.CustomPEMFlags,
 		}
 	}

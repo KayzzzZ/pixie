@@ -42,7 +42,6 @@ namespace stirling {
 
 namespace mux = protocols::mux;
 
-using ::px::stirling::testing::ColWrapperSizeIs;
 using ::px::stirling::testing::FindRecordIdxMatchesPID;
 using ::px::stirling::testing::FindRecordsMatchingPID;
 using ::px::stirling::testing::SocketTraceBPFTest;
@@ -102,10 +101,10 @@ class MuxTraceTest : public SocketTraceBPFTest</* TClientSideTracing */ true> {
 
     LOG(INFO) << absl::StrFormat("Client PID: %d", client_pid);
 
-    if (tokens[1] != thriftmux_client_output) {
+    if (!absl::StrContains(out, thriftmux_client_output)) {
       return error::Internal(
-          absl::StrFormat("Expected output from thriftmux to be '%s', received '%s' instead",
-                          thriftmux_client_output, tokens[1]));
+          absl::StrFormat("Expected output from thriftmux to include '%s', received '%s' instead",
+                          thriftmux_client_output, out));
     }
     return client_pid;
   }
@@ -160,8 +159,7 @@ TEST_F(MuxTraceTest, DISABLED_Capture) {
 
   // Grab the data from Stirling.
   std::vector<TaggedRecordBatch> tablets = ConsumeRecords(SocketTraceConnector::kMuxTableNum);
-  ASSERT_FALSE(tablets.empty());
-  types::ColumnWrapperRecordBatch record_batch = tablets[0].records;
+  ASSERT_NOT_EMPTY_AND_GET_RECORDS(const types::ColumnWrapperRecordBatch& record_batch, tablets);
 
   std::vector<mux::Record> server_records = GetTargetRecords(record_batch, server_.process_pid());
 

@@ -37,6 +37,7 @@
 #include "src/common/system/socket_info.h"
 #include "src/shared/metadata/metadata.h"
 #include "src/stirling/bpf_tools/macros.h"
+#include "src/stirling/bpf_tools/utils.h"
 #include "src/stirling/source_connectors/socket_tracer/bcc_bpf_intf/go_grpc_types.hpp"
 #include "src/stirling/source_connectors/socket_tracer/bcc_bpf_intf/socket_trace.hpp"
 #include "src/stirling/source_connectors/socket_tracer/conn_stats.h"
@@ -135,13 +136,22 @@ DEFINE_uint32(datastream_buffer_retention_size,
               gflags::Uint32FromEnv("PL_DATASTREAM_BUFFER_SIZE", 1024 * 1024),
               "The maximum size of a data stream buffer retained between cycles.");
 
+DEFINE_uint64(max_body_bytes, gflags::Uint64FromEnv("PL_STIRLING_MAX_BODY_BYTES", 512),
+              "The maximum number of bytes in the body of protocols like HTTP");
+
 BPF_SRC_STRVIEW(socket_trace_bcc_script, socket_trace);
 
 namespace px {
 namespace stirling {
 
-using ::px::stirling::protocols::kMaxBodyBytes;
 using ::px::utils::ToJSONString;
+
+// Most HTTP servers support 8K headers, so we truncate after that.
+// https://stackoverflow.com/questions/686217/maximum-on-http-header-values
+constexpr size_t kMaxHTTPHeadersBytes = 8192;
+
+// Protobuf printer will limit strings to this length.
+constexpr size_t kMaxPBStringLen = 64;
 
 SocketTraceConnector::SocketTraceConnector(std::string_view source_name)
     : SourceConnector(source_name, kTables), conn_stats_(&conn_trackers_mgr_), uprobe_mgr_(this) {
@@ -576,7 +586,7 @@ void SocketTraceConnector::UpdateTrackerTraceLevel(ConnTracker* tracker) {
 
 void SocketTraceConnector::TransferDataImpl(ConnectorContext* ctx,
                                             const std::vector<DataTable*>& data_tables) {
-  set_iteration_time(std::chrono::steady_clock::now());
+  set_iteration_time(now_fn_());
 
   UpdateCommonState(ctx);
 
@@ -623,6 +633,15 @@ void SocketTraceConnector::TransferDataImpl(ConnectorContext* ctx,
 
     UpdateTrackerTraceLevel(conn_tracker);
 
+    // Once a known UPID, always a known UPID.
+    if (!conn_tracker->is_tracked_upid()) {
+      md::UPID upid(ctx->GetASID(), conn_tracker->conn_id().upid.pid,
+                    conn_tracker->conn_id().upid.start_time_ticks);
+      if (ctx->GetUPIDs().contains(upid)) {
+        conn_tracker->set_is_tracked_upid();
+      }
+    }
+
     conn_tracker->IterationPreTick(iteration_time_, cluster_cidrs, proc_parser_.get(),
                                    socket_info_mgr_.get());
 
@@ -643,21 +662,11 @@ void SocketTraceConnector::TransferDataImpl(ConnectorContext* ctx,
   pids_to_trace_disable_.clear();
 }
 
-template <typename TValueType>
-Status UpdatePerCPUArrayValue(int idx, TValueType val, ebpf::BPFPercpuArrayTable<TValueType>* arr) {
-  std::vector<TValueType> values(bpf_tools::BCCWrapper::kCPUCount, val);
-  auto update_res = arr->update_value(idx, values);
-  if (!update_res.ok()) {
-    return error::Internal(absl::Substitute("Failed to set value on index: $0, error message: $1",
-                                            idx, update_res.msg()));
-  }
-  return Status::OK();
-}
-
 Status SocketTraceConnector::UpdateBPFProtocolTraceRole(traffic_protocol_t protocol,
                                                         uint64_t role_mask) {
   auto control_map_handle = GetPerCPUArrayTable<uint64_t>(kControlMapName);
-  return UpdatePerCPUArrayValue(static_cast<int>(protocol), role_mask, &control_map_handle);
+  return bpf_tools::UpdatePerCPUArrayValue(static_cast<int>(protocol), role_mask,
+                                           &control_map_handle);
 }
 
 Status SocketTraceConnector::TestOnlySetTargetPID(int64_t pid) {
@@ -668,13 +677,13 @@ Status SocketTraceConnector::TestOnlySetTargetPID(int64_t pid) {
         pid);
   }
   auto control_map_handle = GetPerCPUArrayTable<int64_t>(kControlValuesArrayName);
-  return UpdatePerCPUArrayValue(kTargetTGIDIndex, pid, &control_map_handle);
+  return bpf_tools::UpdatePerCPUArrayValue(kTargetTGIDIndex, pid, &control_map_handle);
 }
 
 Status SocketTraceConnector::DisableSelfTracing() {
   auto control_map_handle = GetPerCPUArrayTable<int64_t>(kControlValuesArrayName);
   int64_t self_pid = getpid();
-  return UpdatePerCPUArrayValue(kStirlingTGIDIndex, self_pid, &control_map_handle);
+  return bpf_tools::UpdatePerCPUArrayValue(kStirlingTGIDIndex, self_pid, &control_map_handle);
 }
 
 //-----------------------------------------------------------------------------
@@ -687,7 +696,30 @@ void SocketTraceConnector::HandleDataEvent(void* cb_cookie, void* data, int data
   auto data_event_ptr = std::make_unique<SocketDataEvent>(data);
   connector->event_counter.Add({{"source_name", "socket_trace_connector"},{"protocol", std::to_string(data_event_ptr.get()->attr.protocol)},{"event_type","data_event"},{"stage","poll_perf_buffer"},{"status","receive"}}).Increment();
   connector->stats_.Increment(StatKey::kPollSocketDataEventSize, data_size);
-  connector->AcceptDataEvent(std::move(data_event_ptr));
+
+  std::unique_ptr<SocketDataEvent> data_event_ptr = std::make_unique<SocketDataEvent>(data);
+
+  // The servers of certain protocols (e.g. Kafka) read the length headers of frames separately
+  // from the payload. In these cases, the protocol inference misses the header of the first frame.
+  // This header is encoded in the attributes instead.
+  // We account for this with a separate header event.
+  std::unique_ptr<SocketDataEvent> header_event_ptr = data_event_ptr->ExtractHeaderEvent();
+
+  // In some scenarios when we are unable to trace the data (notably including sendfile syscalls),
+  // we create a filler event instead. This is important to Kafka, for example,
+  // where the sendfile data is in the payload and the protocol parser can still succeed
+  // as long as it is properly accounted for.
+  std::unique_ptr<SocketDataEvent> filler_event_ptr = data_event_ptr->ExtractFillerEvent();
+
+  if (header_event_ptr) {
+    connector->AcceptDataEvent(std::move(header_event_ptr));
+  }
+  if (data_event_ptr && !data_event_ptr->msg.empty()) {
+    connector->AcceptDataEvent(std::move(data_event_ptr));
+  }
+  if (filler_event_ptr) {
+    connector->AcceptDataEvent(std::move(filler_event_ptr));
+  }
 }
 
 void SocketTraceConnector::HandleDataEventLoss(void* cb_cookie, uint64_t lost) {
@@ -852,6 +884,11 @@ int64_t CalculateLatency(int64_t req_timestamp_ns, int64_t resp_timestamp_ns) {
   return latency_ns;
 }
 
+template <typename TRecordType>
+std::string PXInfoString(const ConnTracker& conn_tracker, const TRecordType& record) {
+  return absl::Substitute("conn_tracker=$0 record=$1", conn_tracker.ToString(), record.ToString());
+}
+
 }  // namespace
 
 template <>
@@ -885,20 +922,20 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("major_version")>(1);
   r.Append<r.ColIndex("minor_version")>(resp_message.minor_version);
   r.Append<r.ColIndex("content_type")>(static_cast<uint64_t>(content_type));
-  r.Append<r.ColIndex("req_headers"), kMaxHTTPHeadersBytes>(ToJSONString(req_message.headers));
+  r.Append<r.ColIndex("req_headers")>(ToJSONString(req_message.headers), kMaxHTTPHeadersBytes);
   r.Append<r.ColIndex("req_method")>(std::move(req_message.req_method));
   r.Append<r.ColIndex("req_path")>(std::move(req_message.req_path));
-  r.Append<r.ColIndex("req_body_size")>(req_message.body.size());
-  r.Append<r.ColIndex("req_body"), kMaxBodyBytes>(std::move(req_message.body));
-  r.Append<r.ColIndex("resp_headers"), kMaxHTTPHeadersBytes>(ToJSONString(resp_message.headers));
+  r.Append<r.ColIndex("req_body_size")>(req_message.body_size);
+  r.Append<r.ColIndex("req_body")>(std::move(req_message.body), FLAGS_max_body_bytes);
+  r.Append<r.ColIndex("resp_headers")>(ToJSONString(resp_message.headers), kMaxHTTPHeadersBytes);
   r.Append<r.ColIndex("resp_status")>(resp_message.resp_status);
   r.Append<r.ColIndex("resp_message")>(std::move(resp_message.resp_message));
-  r.Append<r.ColIndex("resp_body_size")>(resp_message.body.size());
-  r.Append<r.ColIndex("resp_body"), kMaxBodyBytes>(std::move(resp_message.body));
+  r.Append<r.ColIndex("resp_body_size")>(resp_message.body_size);
+  r.Append<r.ColIndex("resp_body")>(std::move(resp_message.body), FLAGS_max_body_bytes);
   r.Append<r.ColIndex("latency")>(
       CalculateLatency(req_message.timestamp_ns, resp_message.timestamp_ns));
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, record));
 #endif
 }
 
@@ -951,9 +988,9 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("major_version")>(2);
   // HTTP2 does not define minor version.
   r.Append<r.ColIndex("minor_version")>(0);
-  r.Append<r.ColIndex("req_headers"), kMaxHTTPHeadersBytes>(ToJSONString(req_stream->headers()));
+  r.Append<r.ColIndex("req_headers")>(ToJSONString(req_stream->headers()), kMaxHTTPHeadersBytes);
   r.Append<r.ColIndex("content_type")>(static_cast<uint64_t>(content_type));
-  r.Append<r.ColIndex("resp_headers"), kMaxHTTPHeadersBytes>(ToJSONString(resp_stream->headers()));
+  r.Append<r.ColIndex("resp_headers")>(ToJSONString(resp_stream->headers()), kMaxHTTPHeadersBytes);
   r.Append<r.ColIndex("req_method")>(
       req_stream->headers().ValueByKey(protocols::http2::headers::kMethod));
   r.Append<r.ColIndex("req_path")>(req_stream->headers().ValueByKey(":path"));
@@ -974,7 +1011,7 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   LOG_IF_EVERY_N(WARNING, latency_ns < 0, 100)
       << absl::Substitute("Negative latency found in HTTP2 records, record=$0", record.ToString());
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, record));
 #endif
 }
 
@@ -991,13 +1028,13 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("req_cmd")>(static_cast<uint64_t>(entry.req.cmd));
-  r.Append<r.ColIndex("req_body"), kMaxBodyBytes>(std::move(entry.req.msg));
+  r.Append<r.ColIndex("req_body")>(std::move(entry.req.msg), FLAGS_max_body_bytes);
   r.Append<r.ColIndex("resp_status")>(static_cast<uint64_t>(entry.resp.status));
-  r.Append<r.ColIndex("resp_body"), kMaxBodyBytes>(std::move(entry.resp.msg));
+  r.Append<r.ColIndex("resp_body")>(std::move(entry.resp.msg), FLAGS_max_body_bytes);
   r.Append<r.ColIndex("latency")>(
       CalculateLatency(entry.req.timestamp_ns, entry.resp.timestamp_ns));
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, entry));
 #endif
 }
 
@@ -1014,13 +1051,13 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("req_op")>(static_cast<uint64_t>(entry.req.op));
-  r.Append<r.ColIndex("req_body"), kMaxBodyBytes>(std::move(entry.req.msg));
+  r.Append<r.ColIndex("req_body")>(std::move(entry.req.msg), FLAGS_max_body_bytes);
   r.Append<r.ColIndex("resp_op")>(static_cast<uint64_t>(entry.resp.op));
-  r.Append<r.ColIndex("resp_body"), kMaxBodyBytes>(std::move(entry.resp.msg));
+  r.Append<r.ColIndex("resp_body")>(std::move(entry.resp.msg), FLAGS_max_body_bytes);
   r.Append<r.ColIndex("latency")>(
       CalculateLatency(entry.req.timestamp_ns, entry.resp.timestamp_ns));
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, entry));
 #endif
 }
 
@@ -1043,7 +1080,7 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("latency")>(
       CalculateLatency(entry.req.timestamp_ns, entry.resp.timestamp_ns));
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, entry));
 #endif
 }
 
@@ -1065,7 +1102,7 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
       CalculateLatency(entry.req.timestamp_ns, entry.resp.timestamp_ns));
   r.Append<r.ColIndex("req_cmd")>(ToString(entry.req.tag, /* is_req */ true));
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, entry));
 #endif
 }
 
@@ -1085,7 +1122,7 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("latency")>(
       CalculateLatency(entry.req.timestamp_ns, entry.resp.timestamp_ns));
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, entry));
 #endif
 }
 
@@ -1129,7 +1166,7 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("latency")>(
       CalculateLatency(entry.req.timestamp_ns, entry.resp.timestamp_ns));
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, entry));
 #endif
 }
 
@@ -1150,7 +1187,7 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("body")>(record.req.options);
   r.Append<r.ColIndex("resp")>(record.resp.command);
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, record));
 #endif
 }
 
@@ -1170,13 +1207,13 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(role);
   r.Append<r.ColIndex("req_cmd")>(static_cast<int64_t>(record.req.api_key));
-  r.Append<r.ColIndex("client_id"), kMaxBodyBytes>(std::move(record.req.client_id));
-  r.Append<r.ColIndex("req_body"), kMaxKafkaBodyBytes>(std::move(record.req.msg));
-  r.Append<r.ColIndex("resp"), kMaxKafkaBodyBytes>(std::move(record.resp.msg));
+  r.Append<r.ColIndex("client_id")>(std::move(record.req.client_id), FLAGS_max_body_bytes);
+  r.Append<r.ColIndex("req_body")>(std::move(record.req.msg), kMaxKafkaBodyBytes);
+  r.Append<r.ColIndex("resp")>(std::move(record.resp.msg), kMaxKafkaBodyBytes);
   r.Append<r.ColIndex("latency")>(
       CalculateLatency(record.req.timestamp_ns, record.resp.timestamp_ns));
 #ifndef NDEBUG
-  r.Append<r.ColIndex("px_info_")>(ToString(conn_tracker.conn_id()));
+  r.Append<r.ColIndex("px_info_")>(PXInfoString(conn_tracker, record));
 #endif
 }
 
@@ -1207,7 +1244,7 @@ void SocketDataEventToPB(const SocketDataEvent& event, sockeventpb::SocketDataEv
   pb->mutable_attr()->set_direction(event.attr.direction);
   pb->mutable_attr()->set_pos(event.attr.pos);
   pb->mutable_attr()->set_msg_size(event.attr.msg_size);
-  pb->set_msg(event.msg);
+  pb->set_msg(std::string(event.msg));
 }
 }  // namespace
 

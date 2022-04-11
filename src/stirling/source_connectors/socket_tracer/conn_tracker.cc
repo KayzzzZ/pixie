@@ -54,6 +54,9 @@ DEFINE_bool(
 DEFINE_int64(
     stirling_check_proc_for_conn_close, true,
     "If enabled, Stirling will check Linux /proc on idle connections to see if they are closed.");
+DEFINE_int64(stirling_untracked_upid_threshold_seconds, 0,
+             "If non-zero, Stirling will disable data tracking of processes that are outside the "
+             "list of PIDs tracked by the context after the specified time period.");
 
 DECLARE_int32(test_only_socket_trace_target_pid);
 
@@ -83,40 +86,40 @@ void ConnTracker::AddControlEvent(const socket_control_event_t& event) {
 
   switch (event.type) {
     case kConnOpen:
-      AddConnOpenEvent(event.open, event.timestamp_ns);
+      AddConnOpenEvent(event);
       break;
     case kConnClose:
-      AddConnCloseEvent(event.close, event.timestamp_ns);
+      AddConnCloseEvent(event);
       break;
     default:
       LOG(DFATAL) << "Unknown control event type: " << event.type;
   }
 }
 
-void ConnTracker::AddConnOpenEvent(const conn_event_t& conn_event, uint64_t timestamp_ns) {
+void ConnTracker::AddConnOpenEvent(const socket_control_event_t& event) {
   if (open_info_.timestamp_ns != 0) {
     CONN_TRACE(1) << absl::Substitute("Clobbering existing ConnOpenEvent.");
   }
-  open_info_.timestamp_ns = timestamp_ns;
+  open_info_.timestamp_ns = event.timestamp_ns;
 
   SetRemoteAddr(conn_event.addr, "Inferred from conn_open.");
   SetSourceAddr(conn_event.source_addr, "Inferred from conn_open.");
 
-  SetRole(conn_event.role, "Inferred from conn_open.");
+  SetRole(event.open.role, "Inferred from conn_open.");
 
-  CONN_TRACE(1) << absl::Substitute("conn_open af=$0 addr=$1 source_addr=$2",
-                                    magic_enum::enum_name(open_info_.remote_addr.family),
+  CONN_TRACE(1) << absl::Substitute("conn_open: $0, af=$1 addr=$2 source_addr=$3",
+                                    ::ToString(event), magic_enum::enum_name(open_info_.remote_addr.family),
                                     open_info_.remote_addr.AddrStr(), open_info_.source_addr.AddrStr());
 }
 
-void ConnTracker::AddConnCloseEvent(const close_event_t& close_event, uint64_t timestamp_ns) {
+void ConnTracker::AddConnCloseEvent(const socket_control_event_t& event) {
   if (close_info_.timestamp_ns != 0) {
     CONN_TRACE(1) << absl::Substitute("Clobbering existing ConnCloseEvent.");
   }
-  close_info_.timestamp_ns = timestamp_ns;
+  close_info_.timestamp_ns = event.timestamp_ns;
 
-  close_info_.send_bytes = close_event.wr_bytes;
-  close_info_.recv_bytes = close_event.rd_bytes;
+  close_info_.send_bytes = event.close.wr_bytes;
+  close_info_.recv_bytes = event.close.rd_bytes;
 
   // Update the state to indicate ConnClose for HTTP parser.
   // When an HTTP response has no Content-Length or Transfer-Encoding, the message is
@@ -135,7 +138,7 @@ void ConnTracker::AddConnCloseEvent(const close_event_t& close_event, uint64_t t
   send_data_.set_conn_closed();
   recv_data_.set_conn_closed();
 
-  CONN_TRACE(1) << absl::Substitute("conn_close");
+  CONN_TRACE(1) << absl::Substitute("conn_close: $0", ::ToString(event));
 
   MarkForDeath();
 }
@@ -149,7 +152,7 @@ void ConnTracker::AddDataEvent(std::unique_ptr<SocketDataEvent> event) {
   UpdateTimestamps(event->attr.timestamp_ns);
   UpdateDataStats(*event);
 
-  CONN_TRACE(1) << absl::Substitute("Data event received: $0", event->ToString());
+  CONN_TRACE(1) << absl::Substitute("Data event: $0", event->ToString());
 
   // TODO(yzhao): Change to let userspace resolve the connection type and signal back to BPF.
   // Then we need at least one data event to let ConnTracker know the field descriptor.
@@ -234,7 +237,7 @@ void ConnTracker::AddHTTP2Header(std::unique_ptr<HTTP2HeaderEvent> hdr) {
     return;
   }
 
-  CONN_TRACE(2) << absl::Substitute("HTTP2 header event received: $0", hdr->ToString());
+  CONN_TRACE(1) << absl::Substitute("HTTP2 header event: $0", hdr->ToString());
 
   if (conn_id_.fd == 0) {
     Disable(
@@ -300,7 +303,7 @@ void ConnTracker::AddHTTP2Header(std::unique_ptr<HTTP2HeaderEvent> hdr) {
     return;
   }
 
-  half_stream_ptr->AddHeader(std::move(hdr->name), std::move(hdr->value));
+  half_stream_ptr->AddHeader(std::string(hdr->name), std::string(hdr->value));
   half_stream_ptr->UpdateTimestamp(hdr->attr.timestamp_ns);
 }
 
@@ -311,7 +314,7 @@ void ConnTracker::AddHTTP2Data(std::unique_ptr<HTTP2DataEvent> data) {
     return;
   }
 
-  CONN_TRACE(1) << absl::Substitute("HTTP2 data event received: $0", data->ToString());
+  CONN_TRACE(1) << absl::Substitute("HTTP2 data event: $0", data->ToString());
 
   if (conn_id_.fd == 0) {
     Disable(
@@ -371,13 +374,13 @@ std::vector<protocols::http2::Record>
 ConnTracker::ProcessToRecords<protocols::http2::ProtocolTraits>() {
   protocols::RecordsWithErrorCount<protocols::http2::Record> result;
 
-  CONN_TRACE(1) << absl::Substitute("HTTP2 client_streams=$0 server_streams=$1",
+  CONN_TRACE(2) << absl::Substitute("HTTP2 client_streams=$0 server_streams=$1",
                                     http2_client_streams_size(), http2_server_streams_size());
 
   protocols::http2::ProcessHTTP2Streams(&http2_client_streams_, &result);
   protocols::http2::ProcessHTTP2Streams(&http2_server_streams_, &result);
 
-  CONN_TRACE(1) << absl::Substitute("Processed records, count=$0", result.records.size());
+  CONN_TRACE(2) << absl::Substitute("Processed records, count=$0", result.records.size());
 
   UpdateResultStats(result);
 
@@ -441,11 +444,14 @@ void ConnTracker::SetConnID(struct conn_id_t conn_id) {
   if (conn_id_ != conn_id) {
     conn_id_ = conn_id;
 
+    creation_timestamp_ =
+        std::chrono::time_point<std::chrono::steady_clock>(std::chrono::nanoseconds(conn_id.tsid));
+
     if (ShouldTraceConn(conn_id_)) {
       SetDebugTrace(2);
     }
 
-    CONN_TRACE(1) << "New connection tracker";
+    CONN_TRACE(2) << "New connection tracker";
   }
 }
 
@@ -486,7 +492,7 @@ bool ConnTracker::SetRole(endpoint_role_t role, std::string_view reason) {
   }
 
   if (role != kRoleUnknown) {
-    CONN_TRACE(1) << absl::Substitute("Role updated $0 -> $1, reason=[$2]]",
+    CONN_TRACE(2) << absl::Substitute("Role updated $0 -> $1, reason=[$2]]",
                                       magic_enum::enum_name(role_), magic_enum::enum_name(role),
                                       reason);
     role_ = role;
@@ -514,7 +520,7 @@ bool ConnTracker::SetProtocol(traffic_protocol_t protocol, std::string_view reas
 
   traffic_protocol_t old_protocol = protocol_;
   protocol_ = protocol;
-  CONN_TRACE(1) << absl::Substitute("Protocol changed: $0->$1, reason=[$2]",
+  CONN_TRACE(2) << absl::Substitute("Protocol changed: $0->$1, reason=[$2]",
                                     magic_enum::enum_name(old_protocol),
                                     magic_enum::enum_name(protocol), reason);
   return true;
@@ -673,6 +679,16 @@ void ConnTracker::UpdateState(const std::vector<CIDRBlock>& cluster_cidrs) {
       open_info_.remote_addr.family != SockAddrFamily::kUnspecified) {
     Disable("Unhandled socket address family");
     return;
+  }
+
+  if (FLAGS_stirling_untracked_upid_threshold_seconds > 0 && !is_tracked_upid_) {
+    // It takes some time for the ConnectorContext to detect new processes,
+    // so leave some time before making a judgment.
+    auto threshold = std::chrono::seconds(FLAGS_stirling_untracked_upid_threshold_seconds);
+    if (current_time_ > creation_timestamp() + threshold) {
+      Disable("Not a tracked process.");
+      return;
+    }
   }
 
   if (ShouldTraceProtocolRole(protocol(), role())) {

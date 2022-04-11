@@ -75,8 +75,9 @@ void RegisterMathOpsOrDie(udf::Registry* registry) {
       "subtract");
   registry->RegisterOrDie<SubtractUDF<types::Float64Value, types::Int64Value, types::Float64Value>>(
       "subtract");
-  registry->RegisterOrDie<SubtractUDF<types::Int64Value, types::Time64NSValue, types::Int64Value>>(
-      "subtract");
+  registry
+      ->RegisterOrDie<SubtractUDF<types::Time64NSValue, types::Time64NSValue, types::Int64Value>>(
+          "subtract");
   registry
       ->RegisterOrDie<SubtractUDF<types::Int64Value, types::Time64NSValue, types::Time64NSValue>>(
           "subtract");
@@ -204,10 +205,9 @@ void RegisterMathOpsOrDie(udf::Registry* registry) {
       "greaterThanEqual");
   registry->RegisterOrDie<GreaterThanEqualUDF<types::Float64Value, types::Float64Value>>(
       "greaterThanEqual");
-  registry->RegisterOrDie<GreaterThanUDF<types::StringValue, types::StringValue>>(
+  registry->RegisterOrDie<GreaterThanEqualUDF<types::StringValue, types::StringValue>>(
       "greaterThanEqual");
-
-  registry->RegisterOrDie<GreaterThanUDF<types::Time64NSValue, types::Time64NSValue>>(
+  registry->RegisterOrDie<GreaterThanEqualUDF<types::Time64NSValue, types::Time64NSValue>>(
       "greaterThanEqual");
   // <
   registry->RegisterOrDie<LessThanUDF<types::Int64Value, types::Int64Value>>("lessThan");
@@ -219,7 +219,8 @@ void RegisterMathOpsOrDie(udf::Registry* registry) {
       "lessThanEqual");
   registry->RegisterOrDie<LessThanEqualUDF<types::Time64NSValue, types::Time64NSValue>>(
       "lessThanEqual");
-  registry->RegisterOrDie<LessThanUDF<types::StringValue, types::StringValue>>("lessThanEqual");
+  registry->RegisterOrDie<LessThanEqualUDF<types::StringValue, types::StringValue>>(
+      "lessThanEqual");
 
   // Bin
   registry->RegisterOrDie<BinUDF<types::Int64Value, types::Int64Value, types::Int64Value>>("bin");
