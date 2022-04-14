@@ -28,7 +28,7 @@ namespace stirling {
 namespace {
 
 ConnStats::AggKey BuildAggKey(const upid_t& upid, endpoint_role_t role,
-                              const SockAddr& remote_endpoint) {
+                              const SockAddr& remote_endpoint, const SockAddr& source_endpoint) {
   // Both local UPID and remote endpoint must be fully specified.
   DCHECK_NE(upid.pid, 0);
   DCHECK_NE(upid.start_time_ticks, 0);
@@ -39,6 +39,8 @@ ConnStats::AggKey BuildAggKey(const upid_t& upid, endpoint_role_t role,
       .remote_addr = remote_endpoint.AddrStr(),
       // Set port to 0 if this event is from a server process.
       // This avoids creating excessive amount of records from changing ports of K8s services.
+      .source_addr = source_endpoint.AddrStr(),
+      .source_port = role == kRoleServer ? source_endpoint.port() : 0,
       .remote_port = role == kRoleServer ? 0 : remote_endpoint.port(),
   };
 }
@@ -65,7 +67,7 @@ absl::flat_hash_map<ConnStats::AggKey, ConnStats::Stats>& ConnStats::UpdateStats
     int bytes_recv = conn_stats.BytesRecvSinceLastRead();
     int bytes_sent = conn_stats.BytesSentSinceLastRead();
 
-    AggKey key = BuildAggKey(tracker->conn_id().upid, tracker->role(), tracker->remote_endpoint());
+    AggKey key = BuildAggKey(tracker->conn_id().upid, tracker->role(), tracker->remote_endpoint(), tracker->source_endpoint());
     auto& stats = agg_stats_[key];
 
     stats.addr_family = tracker->remote_endpoint().family;

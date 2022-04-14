@@ -426,6 +426,7 @@ void BCCWrapper::PollPerfBuffer(std::string_view perf_buffer_name, int timeout_m
 
 void BCCWrapper::PollPerfBuffers(int timeout_ms) {
   for (const auto& spec : perf_buffers_) {
+    // @qianlu.kk 这里是否可以并发 poll?
     PollPerfBuffer(spec.name, timeout_ms);
   }
 }

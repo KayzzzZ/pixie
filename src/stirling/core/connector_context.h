@@ -28,6 +28,7 @@
 #include "src/shared/types/types.h"
 #include "src/shared/upid/upid.h"
 #include "src/stirling/utils/proc_tracker.h"
+#include "src/shared/metadata/thread_manager.h"
 
 namespace px {
 namespace stirling {
@@ -156,6 +157,9 @@ class SystemWideStandaloneContext : public StandaloneContext {
   SystemWideStandaloneContext() {
     // The context consists of all PIDs on the system.
     upids_ = ListUPIDs(system::Config::GetInstance().proc_path(), 0);
+    md::ThreadManager& tm = md::ThreadManager::GetInstance();
+    Status status = tm.SetCurrentPids(upids_);
+    VLOG(5) << absl::Substitute("set current pids, status:$0", status.ToString());
   }
 };
 

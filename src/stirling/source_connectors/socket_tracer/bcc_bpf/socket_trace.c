@@ -300,10 +300,8 @@ static __inline void read_source_sockaddr_kernel(struct conn_info_t* conn_info,
 
   struct sock_common* sk_common = &sk->__sk_common;
   uint16_t family = -1;
-  // source port
   uint16_t sport = -1;
   bpf_probe_read_kernel(&sport, sizeof(sport), &((struct inet_sock *)sk)->inet_sport);
-//  sport = ((struct inet_sock *)sk)->inet_sport;
 
   bpf_probe_read_kernel(&family, sizeof(family), &sk_common->skc_family);
   conn_info->source_addr.sa.sa_family = family;

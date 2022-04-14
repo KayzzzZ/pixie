@@ -242,34 +242,34 @@ const auto kProbeSpecs = MakeArray<bpf_tools::KProbeSpec>(
      {"accept", ProbeType::kReturn, "syscall__probe_ret_accept"},
      {"accept4", ProbeType::kEntry, "syscall__probe_entry_accept4"},
      {"accept4", ProbeType::kReturn, "syscall__probe_ret_accept4"},
-//     {"write", ProbeType::kEntry, "syscall__probe_entry_write"},
-//     {"write", ProbeType::kReturn, "syscall__probe_ret_write"},
-//     {"writev", ProbeType::kEntry, "syscall__probe_entry_writev"},
-//     {"writev", ProbeType::kReturn, "syscall__probe_ret_writev"},
-//     {"send", ProbeType::kEntry, "syscall__probe_entry_send"},
-//     {"send", ProbeType::kReturn, "syscall__probe_ret_send"},
-//     {"sendto", ProbeType::kEntry, "syscall__probe_entry_sendto"},
-//     {"sendto", ProbeType::kReturn, "syscall__probe_ret_sendto"},
-//     {"sendmsg", ProbeType::kEntry, "syscall__probe_entry_sendmsg"},
-//     {"sendmsg", ProbeType::kReturn, "syscall__probe_ret_sendmsg"},
-//     {"sendmmsg", ProbeType::kEntry, "syscall__probe_entry_sendmmsg"},
-//     {"sendmmsg", ProbeType::kReturn, "syscall__probe_ret_sendmmsg"},
-//     {"sendfile", ProbeType::kEntry, "syscall__probe_entry_sendfile"},
-//     {"sendfile", ProbeType::kReturn, "syscall__probe_ret_sendfile"},
-//     {"sendfile64", ProbeType::kEntry, "syscall__probe_entry_sendfile"},
-//     {"sendfile64", ProbeType::kReturn, "syscall__probe_ret_sendfile"},
-//     {"read", ProbeType::kEntry, "syscall__probe_entry_read"},
-//     {"read", ProbeType::kReturn, "syscall__probe_ret_read"},
-//     {"readv", ProbeType::kEntry, "syscall__probe_entry_readv"},
-//     {"readv", ProbeType::kReturn, "syscall__probe_ret_readv"},
-//     {"recv", ProbeType::kEntry, "syscall__probe_entry_recv"},
-//     {"recv", ProbeType::kReturn, "syscall__probe_ret_recv"},
-//     {"recvfrom", ProbeType::kEntry, "syscall__probe_entry_recvfrom"},
-//     {"recvfrom", ProbeType::kReturn, "syscall__probe_ret_recvfrom"},
-//     {"recvmsg", ProbeType::kEntry, "syscall__probe_entry_recvmsg"},
-//     {"recvmsg", ProbeType::kReturn, "syscall__probe_ret_recvmsg"},
-//     {"recvmmsg", ProbeType::kEntry, "syscall__probe_entry_recvmmsg"},
-//     {"recvmmsg", ProbeType::kReturn, "syscall__probe_ret_recvmmsg"},
+     {"write", ProbeType::kEntry, "syscall__probe_entry_write"},
+     {"write", ProbeType::kReturn, "syscall__probe_ret_write"},
+     {"writev", ProbeType::kEntry, "syscall__probe_entry_writev"},
+     {"writev", ProbeType::kReturn, "syscall__probe_ret_writev"},
+     {"send", ProbeType::kEntry, "syscall__probe_entry_send"},
+     {"send", ProbeType::kReturn, "syscall__probe_ret_send"},
+     {"sendto", ProbeType::kEntry, "syscall__probe_entry_sendto"},
+     {"sendto", ProbeType::kReturn, "syscall__probe_ret_sendto"},
+     {"sendmsg", ProbeType::kEntry, "syscall__probe_entry_sendmsg"},
+     {"sendmsg", ProbeType::kReturn, "syscall__probe_ret_sendmsg"},
+     {"sendmmsg", ProbeType::kEntry, "syscall__probe_entry_sendmmsg"},
+     {"sendmmsg", ProbeType::kReturn, "syscall__probe_ret_sendmmsg"},
+     {"sendfile", ProbeType::kEntry, "syscall__probe_entry_sendfile"},
+     {"sendfile", ProbeType::kReturn, "syscall__probe_ret_sendfile"},
+     {"sendfile64", ProbeType::kEntry, "syscall__probe_entry_sendfile"},
+     {"sendfile64", ProbeType::kReturn, "syscall__probe_ret_sendfile"},
+     {"read", ProbeType::kEntry, "syscall__probe_entry_read"},
+     {"read", ProbeType::kReturn, "syscall__probe_ret_read"},
+     {"readv", ProbeType::kEntry, "syscall__probe_entry_readv"},
+     {"readv", ProbeType::kReturn, "syscall__probe_ret_readv"},
+     {"recv", ProbeType::kEntry, "syscall__probe_entry_recv"},
+     {"recv", ProbeType::kReturn, "syscall__probe_ret_recv"},
+     {"recvfrom", ProbeType::kEntry, "syscall__probe_entry_recvfrom"},
+     {"recvfrom", ProbeType::kReturn, "syscall__probe_ret_recvfrom"},
+     {"recvmsg", ProbeType::kEntry, "syscall__probe_entry_recvmsg"},
+     {"recvmsg", ProbeType::kReturn, "syscall__probe_ret_recvmsg"},
+     {"recvmmsg", ProbeType::kEntry, "syscall__probe_entry_recvmmsg"},
+     {"recvmmsg", ProbeType::kReturn, "syscall__probe_ret_recvmmsg"},
      {"close", ProbeType::kEntry, "syscall__probe_entry_close"},
      {"close", ProbeType::kReturn, "syscall__probe_ret_close"},
      {"mmap", ProbeType::kEntry, "syscall__probe_entry_mmap"},
@@ -693,11 +693,9 @@ Status SocketTraceConnector::DisableSelfTracing() {
 void SocketTraceConnector::HandleDataEvent(void* cb_cookie, void* data, int data_size) {
   DCHECK(cb_cookie != nullptr) << "Perf buffer callback not set-up properly. Missing cb_cookie.";
   auto* connector = static_cast<SocketTraceConnector*>(cb_cookie);
-  auto data_event_ptr = std::make_unique<SocketDataEvent>(data);
+  std::unique_ptr<SocketDataEvent> data_event_ptr = std::make_unique<SocketDataEvent>(data);
   connector->event_counter.Add({{"source_name", "socket_trace_connector"},{"protocol", std::to_string(data_event_ptr.get()->attr.protocol)},{"event_type","data_event"},{"stage","poll_perf_buffer"},{"status","receive"}}).Increment();
   connector->stats_.Increment(StatKey::kPollSocketDataEventSize, data_size);
-
-  std::unique_ptr<SocketDataEvent> data_event_ptr = std::make_unique<SocketDataEvent>(data);
 
   // The servers of certain protocols (e.g. Kafka) read the length headers of frames separately
   // from the payload. In these cases, the protocol inference misses the header of the first frame.
@@ -1026,6 +1024,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("req_cmd")>(static_cast<uint64_t>(entry.req.cmd));
   r.Append<r.ColIndex("req_body")>(std::move(entry.req.msg), FLAGS_max_body_bytes);
@@ -1049,6 +1049,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("req_op")>(static_cast<uint64_t>(entry.req.op));
   r.Append<r.ColIndex("req_body")>(std::move(entry.req.msg), FLAGS_max_body_bytes);
@@ -1072,6 +1074,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("req_header")>(entry.req.header);
   r.Append<r.ColIndex("req_body")>(entry.req.query);
@@ -1095,6 +1099,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("req")>(std::move(entry.req.payload));
   r.Append<r.ColIndex("resp")>(std::move(entry.resp.payload));
@@ -1117,6 +1123,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(conn_tracker.role());
   r.Append<r.ColIndex("req_type")>(entry.req.type);
   r.Append<r.ColIndex("latency")>(
@@ -1159,6 +1167,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(role);
   r.Append<r.ColIndex("req_cmd")>(std::string(entry.req.command));
   r.Append<r.ColIndex("req_args")>(std::string(entry.req.payload));
@@ -1182,6 +1192,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(role);
   r.Append<r.ColIndex("cmd")>(record.req.command);
   r.Append<r.ColIndex("body")>(record.req.options);
@@ -1205,6 +1217,8 @@ void SocketTraceConnector::AppendMessage(ConnectorContext* ctx, const ConnTracke
   r.Append<r.ColIndex("upid")>(upid.value());
   r.Append<r.ColIndex("remote_addr")>(conn_tracker.remote_endpoint().AddrStr());
   r.Append<r.ColIndex("remote_port")>(conn_tracker.remote_endpoint().port());
+  r.Append<r.ColIndex("source_addr")>(conn_tracker.source_endpoint().AddrStr());
+  r.Append<r.ColIndex("source_port")>(conn_tracker.source_endpoint().port());
   r.Append<r.ColIndex("trace_role")>(role);
   r.Append<r.ColIndex("req_cmd")>(static_cast<int64_t>(record.req.api_key));
   r.Append<r.ColIndex("client_id")>(std::move(record.req.client_id), FLAGS_max_body_bytes);
@@ -1339,6 +1353,8 @@ void SocketTraceConnector::TransferConnStats(ConnectorContext* ctx, DataTable* d
       r.Append<idx::kUPID>(upid.value());
       r.Append<idx::kRemoteAddr>(key.remote_addr);
       r.Append<idx::kRemotePort>(key.remote_port);
+      r.Append<idx::kSourceAddrIdx>(key.source_addr);
+      r.Append<idx::kSourcePortIdx>(key.source_port);
       r.Append<idx::kAddrFamily>(static_cast<int>(stats.addr_family));
       r.Append<idx::kProtocol>(stats.protocol);
       r.Append<idx::kRole>(stats.role);

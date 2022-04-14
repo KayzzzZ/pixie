@@ -40,6 +40,37 @@ class ConnectorContext;
 class SourceConnector;
 class DataTable;
 
+class InfoClassMini final : public NotCopyable {
+public:
+  explicit InfoClassMini(const DataTableSchema& schema)
+    : id_(global_id_++), schema_(schema) {}
+
+  void SetSourceConnector(SourceConnector* source) { source_ = source; }
+
+  const DataTableSchema& Schema() const { return schema_; }
+
+  const DataElement& GetElement(size_t index) const {
+    DCHECK(index < schema_.elements().size());
+    return schema_.elements()[index];
+  }
+
+  std::string_view name() const { return schema_.name(); }
+  const SourceConnector* source() const { return source_; }
+  uint64_t id() const { return id_; }
+
+private:
+  inline static std::atomic<uint64_t> global_id_ = 0;
+
+  // Unique ID of the InfoClassManager instance. ID must never repeat, even after destruction.
+  const uint64_t id_;
+
+  // The schema of table associated with this Info Class manager.
+  const DataTableSchema& schema_;
+
+  // Pointer back to the source connector providing the data.
+  SourceConnector* source_ = nullptr;
+};
+
 /**
  * InfoClassManager is the unit responsible for managing a data source, and its data transfers.
  *
@@ -131,6 +162,7 @@ class InfoClassManager final : public NotCopyable {
 };
 
 using InfoClassManagerVec = std::vector<std::unique_ptr<InfoClassManager>>;
+using InfoClassMiniVec = std::vector<std::unique_ptr<InfoClassMini>>;
 
 }  // namespace stirling
 }  // namespace px

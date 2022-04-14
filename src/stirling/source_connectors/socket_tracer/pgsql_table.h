@@ -31,6 +31,8 @@ static constexpr DataElement kPGSQLElements[] = {
         canonical_data_elements::kUPID,
         canonical_data_elements::kRemoteAddr,
         canonical_data_elements::kRemotePort,
+        canonical_data_elements::kSourceAddr,
+        canonical_data_elements::kSourcePort,
         canonical_data_elements::kTraceRole,
         {"req_cmd", "PostgreSQL request command code",
          types::DataType::STRING,
@@ -56,6 +58,8 @@ static constexpr auto kPGSQLTable = DataTableSchema(
 DEFINE_PRINT_TABLE(PGSQL)
 
 constexpr int kPGSQLUPIDIdx = kPGSQLTable.ColIndex("upid");
+constexpr int kPGSQLSourceAddrIdx = kPGSQLTable.ColIndex("source_addr");
+constexpr int kPGSQLSourcePortIdx = kPGSQLTable.ColIndex("source_port");
 constexpr int kPGSQLReqIdx = kPGSQLTable.ColIndex("req");
 constexpr int kPGSQLRespIdx = kPGSQLTable.ColIndex("resp");
 constexpr int kPGSQLReqCmdIdx = kPGSQLTable.ColIndex("req_cmd");

@@ -167,8 +167,8 @@ class DataTable : public NotCopyable {
 
       tablet_.records[TIndex]->Append(std::move(val));
       DCHECK(!signature_[TIndex]) << absl::Substitute(
-          "Attempt to Append() to column $0 (name=$1) multiple times", TIndex,
-          schema->ColName(TIndex));
+          "Attempt to Append() to column $0 (name=$1 table=$2) multiple times", TIndex,
+          schema->ColName(TIndex), schema->name());
       signature_.set(TIndex);
     }
 

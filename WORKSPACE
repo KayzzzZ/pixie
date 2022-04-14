@@ -7,7 +7,7 @@ check_min_bazel_version("4.0.0")
 load("//bazel:repositories.bzl", "pl_deps")
 
 # Install Pixie Labs Dependencies.
-#pl_deps()
+pl_deps()
 
 # Order is important. Try to go from most basic/primitive to higher level packages.
 # - go_rules_dependencies
@@ -108,6 +108,7 @@ pl_model_files()
 
 #install_deps()
 
+load("@rules_python//python:pip.bzl", "pip_parse")
 pip_parse(
     name = "pxapi_python_doc_deps",
     requirements_lock = "//src/api/python/doc:requirements.txt",

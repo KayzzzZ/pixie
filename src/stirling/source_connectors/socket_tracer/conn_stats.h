@@ -47,21 +47,24 @@ class ConnStats {
   struct AggKey {
     struct upid_t upid;
     std::string remote_addr;
+    std::string source_addr;
+    int source_port;
     int remote_port;
 
     bool operator==(const AggKey& rhs) const {
       return upid.tgid == rhs.upid.tgid && upid.start_time_ticks == rhs.upid.start_time_ticks &&
-             remote_addr == rhs.remote_addr && remote_port == rhs.remote_port;
+             remote_addr == rhs.remote_addr && remote_port == rhs.remote_port &&
+             source_addr == rhs.source_addr && source_port == rhs.source_port;
     }
 
     template <typename H>
     friend H AbslHashValue(H h, const AggKey& key) {
       return H::combine(std::move(h), key.upid.tgid, key.upid.start_time_ticks, key.remote_addr,
-                        key.remote_port);
+                        key.remote_port, key.source_addr, key.source_port);
     }
 
     std::string ToString() const {
-      return absl::Substitute("[tgid=$0 addr=$1 port=$2]", upid.tgid, remote_addr, remote_port);
+      return absl::Substitute("[tgid=$0 r_addr=$1 r_port=$2 s_addr=$3 s_port=$4]", upid.tgid, remote_addr, remote_port, source_addr, source_port);
     }
   };
 

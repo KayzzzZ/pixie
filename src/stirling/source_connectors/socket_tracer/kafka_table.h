@@ -37,6 +37,8 @@ static constexpr DataElement kKafkaElements[] = {
       canonical_data_elements::kUPID,
       canonical_data_elements::kRemoteAddr,
       canonical_data_elements::kRemotePort,
+      canonical_data_elements::kSourceAddr,
+      canonical_data_elements::kSourcePort,
       canonical_data_elements::kTraceRole,
       {"req_cmd", "Kafka request command",
        types::DataType::INT64,

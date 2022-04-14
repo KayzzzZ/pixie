@@ -207,12 +207,20 @@ Status Table::TransferRecordBatch(
 
   uint32_t i = 0;
   int64_t rb_bytes = 0;
+  auto batch_size = record_batch->at(0)->Size();
   for (const auto& col : *record_batch) {
     auto received_type = col->data_type();
     auto expected_type = rel_.col_types().at(i);
     DCHECK_EQ(expected_type, received_type)
         << absl::StrFormat("Type mismatch [column=%u]: expected=%s received=%s", i,
                            ToString(expected_type), ToString(received_type));
+
+    auto col_name = rel_.col_names().at(i);
+    auto value_type = DataTypeTraits<received_type>::value_type;
+    for (size_t j = 0; j < batch_size; ++ j ) {
+      auto val = record_batch->at(i)->Get<px::types::Time64NSValue>(j).val;
+    }
+
     rb_bytes += col->Bytes();
     ++i;
   }

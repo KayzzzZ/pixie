@@ -29,7 +29,13 @@
 namespace px {
 namespace md {
 
+
+std::filesystem::path CGroupMetadataReader::proc_base_path_;
+std::regex CGroupMetadataReader::container_id_reg;
+
 CGroupMetadataReader::CGroupMetadataReader(const system::Config& cfg) {
+  proc_base_path_ = cfg.proc_path();
+  container_id_reg = std::regex("\b[0-9a-f]{64}\b");
   // Create the new path resolver.
   auto path_resolver_or_status = CGroupPathResolver::Create(cfg.sysfs_path().string());
   path_resolver_ = path_resolver_or_status.ConsumeValueOr(nullptr);
@@ -98,6 +104,37 @@ Status CGroupMetadataReader::ReadPIDs(PodQOSClass qos_class, std::string_view po
     pid_set->emplace(pid);
   }
   return Status::OK();
+}
+
+StatusOr<std::vector<std::string>> CGroupMetadataReader::ReadContainerIds(uint32_t pid) {
+  std::filesystem::path proc_path = proc_base_path_ / std::to_string(pid);
+  std::ifstream ifs(proc_path);
+  if (!ifs) {
+    return error::NotFound("Failed to open file $0", proc_path.string());
+  }
+
+  std::string line;
+  std::vector<std::string> container_ids;
+  while(std::getline(ifs, line)) {
+    if (line.empty()) {
+      continue;
+    }
+    size_t idx = line.find("pids");
+    if (idx == line.npos) {
+      continue;
+    }
+    std::string container_id;
+    std::cmatch m;
+    auto ret = std::regex_search(line.c_str(), m, container_id_reg);
+    if (ret) {
+      for (auto& elem : m) {
+        container_ids.push_back(elem);
+      }
+    } else {
+      LOG(WARNING) << absl::Substitute("Failed to find container id for pid:$0, cgroup line:$1", pid, line);
+    }
+  }
+  return container_ids;
 }
 
 }  // namespace md

@@ -27,6 +27,21 @@
 #include "src/stirling/source_connectors/socket_tracer/bcc_bpf_intf/common.h"
 #include "src/stirling/source_connectors/socket_tracer/bcc_bpf_intf/socket_trace.h"
 
+static __inline enum message_type_t infer_http2_message(const char* buf, size_t count) {
+  if (count < 9) {
+    return kUnknown;
+  }
+
+  // HTTP2 Client always starts connection with client preface
+  const char http2_client_preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+  if (count >= 24 && bpf_strncmp((const char*)buf, http2_client_preface, 4) == 0) {
+      return kRequest;
+  }
+
+  // HTTP2 Server
+
+}
+
 static __inline enum message_type_t infer_http_message(const char* buf, size_t count) {
   // Smallest HTTP response is 17 characters:
   // HTTP/1.1 200 OK\r\n

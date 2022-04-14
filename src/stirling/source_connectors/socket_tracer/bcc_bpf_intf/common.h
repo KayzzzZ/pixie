@@ -24,6 +24,8 @@
 
 enum message_type_t { kUnknown, kRequest, kResponse };
 
+enum http2_frame_type_t { kSettingFrame, };
+
 enum traffic_direction_t {
   kEgress,
   kIngress,

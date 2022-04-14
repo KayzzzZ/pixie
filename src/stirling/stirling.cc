@@ -213,6 +213,12 @@ class StirlingImpl final : public Stirling {
   void EnablePIDTrace(int pid);
   void DisablePIDTrace(int pid);
 
+  const InfoClassManagerVec& GetInfoClassManagers() const { return info_class_mgrs_; };
+  const absl::base_internal::SpinLock& GetInfoClassManagersLock() const { return info_class_mgrs_lock_; }
+  Status DummyConsumeRecords(uint64_t table_id, types::TabletID tablet_id,
+                        std::unique_ptr<types::ColumnWrapperRecordBatch> record_batch) override;
+  const InfoClassMiniVec& GetMiniVec() override { return info_class_mini_mgrs_; }
+
  private:
   // Adds a source to Stirling, and updates all state accordingly.
   Status AddSource(std::unique_ptr<SourceConnector> source);
@@ -246,6 +252,8 @@ class StirlingImpl final : public Stirling {
       ABSL_GUARDED_BY(info_class_mgrs_lock_);
 
   InfoClassManagerVec info_class_mgrs_ ABSL_GUARDED_BY(info_class_mgrs_lock_);
+
+  InfoClassMiniVec info_class_mini_mgrs_;
 
   // Lock to protect both info_class_mgrs_ and sources_.
   absl::base_internal::SpinLock info_class_mgrs_lock_;
@@ -423,9 +431,12 @@ Status StirlingImpl::AddSource(std::unique_ptr<SourceConnector> source) {
   for (const DataTableSchema& schema : source->table_schemas()) {
     LOG(INFO) << absl::Substitute("Adding info class: [$0/$1]", source->name(), schema.name());
     auto mgr = std::make_unique<InfoClassManager>(schema);
+    auto mini = std::make_unique<InfoClassMini>(schema);
     mgr->SetSourceConnector(source.get());
     mgrs.push_back(mgr.get());
+    mini->SetSourceConnector(source.get());
     info_class_mgrs_.push_back(std::move(mgr));
+    info_class_mini_mgrs_.push_back(std::move(mini));
   }
 
   std::vector<DataTable*> data_tables = GetDataTables(mgrs);
@@ -793,7 +804,7 @@ void StirlingImpl::RunCore() {
           source->TransferData(ctx.get(), output.data_tables);
         }
         // Phase 2: Push Data upstream.
-        if (source->push_freq_mgr().Expired() || DataExceedsThreshold(output.data_tables)) {
+        if (data_push_callback_ && (source->push_freq_mgr().Expired() || DataExceedsThreshold(output.data_tables))) {
           source->PushData(data_push_callback_, output.data_tables);
         }
       }
@@ -872,6 +883,114 @@ std::unique_ptr<Stirling> Stirling::Create(std::unique_ptr<SourceRegistry> regis
   PL_CHECK_OK(stirling->Init());
 
   return stirling;
+}
+
+Status StirlingImpl::DummyConsumeRecords(uint64_t table_id, types::TabletID tablet_id,
+                           std::unique_ptr<types::ColumnWrapperRecordBatch> record_batch) {
+
+  if (record_batch == nullptr || record_batch->empty()) {
+    LOG(WARNING) << absl::Substitute("DummyConsumeRecords record_batch is empty, table_id:$0, tablet_id:$1",
+                                   table_id, tablet_id);
+    return Status::OK();
+  }
+
+  LOG(WARNING) << absl::Substitute("DummyConsumeRecords entering ... ");
+  size_t mgrs_size = -1;
+  InfoClassMini* mgr = nullptr;
+  {
+    LOG(WARNING) << absl::Substitute("DummyConsumeRecords before lock ... ");
+//    absl::base_internal::SpinLockHolder lock(&info_class_mgrs_lock_);
+    LOG(WARNING) << absl::Substitute("DummyConsumeRecords locked ... ");
+    mgrs_size = info_class_mini_mgrs_.size();
+    if (table_id >= mgrs_size) {
+      LOG(ERROR) << absl::Substitute("DummyConsumeRecords index out of range, table_id:$0, mgr_size:$1, tablet_id:$2",
+                                     table_id, mgrs_size, tablet_id);
+      return Status::OK();
+    }
+
+    mgr = info_class_mini_mgrs_.at(table_id).get();
+    LOG(WARNING) << absl::Substitute("DummyConsumeRecords before unlock ... ");
+  }
+
+  LOG(WARNING) << absl::Substitute("DummyConsumeRecords unlocked ... ");
+
+  if (mgr == nullptr) {
+    LOG(ERROR) << absl::Substitute("DummyConsumeRecords info_class_mgr is nullptr, table_id:$0, mgr_size:$1, record_batch size:$2, tablet_id:$3",
+                                   table_id, mgrs_size, record_batch->size(), tablet_id);;
+    return Status::OK();
+  }
+  const std::string& source_name = mgr->source()->name();
+  ArrayView<DataElement> elements = mgr->Schema().elements();
+  std::string schema_name(mgr->Schema().name().data());
+
+  if (record_batch->size() != elements.size()) {
+    LOG(ERROR) << absl::Substitute("DummyConsumeRecords record batch size neq schema elements size, table_id:$0, mgr_size:$1, record_batch size:$2, schema size:$3, tablet_id:$4",
+                                   table_id, mgrs_size, record_batch->size(), elements.size(), tablet_id);;
+    return Status::OK();
+  }
+
+  size_t point_size = record_batch->at(0)->Size();
+  for (size_t i = 0; i < point_size; ++ i ) {
+    for (size_t j = 0; j < elements.size(); ++ j ) {
+      DataElement de = elements[j];
+      std::string_view col_name = de.name();
+      types::DataType data_type = de.type();
+      switch (data_type) {
+        case types::DataType::BOOLEAN: {
+          bool bool_val = record_batch->at(j)->Get<types::BoolValue>(i).val;
+          LOG(WARNING) << absl::Substitute(
+            "DummyConsumeRecords source:$0, col_idx:$1, col_name:$2, val:$3, table_id:$4, tablet_id:$5, schema:$6", source_name, j,
+            col_name, bool_val, table_id, tablet_id, schema_name);
+          break;
+        }
+        case types::DataType::INT64: {
+          int64_t i64_val = record_batch->at(j)->Get<types::Int64Value>(i).val;
+          LOG(WARNING) << absl::Substitute(
+            "DummyConsumeRecords source:$0, col_idx:$1, col_name:$2, val:$3, table_id:$4, tablet_id:$5, schema:$6", source_name, j,
+            col_name, i64_val, table_id, tablet_id, schema_name);
+          break;
+        }
+        case types::DataType::UINT128: {
+          uint64_t h64_val = record_batch->at(j)->Get<types::UInt128Value>(i).High64();
+          uint64_t l64_val = record_batch->at(j)->Get<types::UInt128Value>(i).Low64();
+          LOG(WARNING) << absl::Substitute(
+            "DummyConsumeRecords source:$0, col_idx:$1, col_name:$2, high64:$3, low64:$4, table_id:$5, tablet_id:$6, schema:$7",
+            source_name, j, col_name, h64_val, l64_val, table_id, tablet_id, schema_name);
+          break;
+        }
+        case types::DataType::FLOAT64: {
+          double f64_val = record_batch->at(j)->Get<types::Float64Value>(i).val;
+          LOG(WARNING) << absl::Substitute(
+            "DummyConsumeRecords source:$0, col_idx:$1, col_name:$2, val:$3, table_id:$4, tablet_id:$5, schema:$6", source_name, j,
+            col_name, f64_val, table_id, tablet_id, schema_name);
+          break;
+        }
+        case types::DataType::TIME64NS: {
+          int64_t t64_val = record_batch->at(j)->Get<types::Time64NSValue>(i).val;
+          LOG(WARNING) << absl::Substitute(
+            "DummyConsumeRecords source:$0, col_idx:$1, col_name:$2, val:$3, table_id:$4, tablet_id:$5, schema:$6", source_name, j,
+            col_name, t64_val, table_id, tablet_id, schema_name);
+          break;
+        }
+        case types::DataType::STRING: {
+          std::string str_val = record_batch->at(j)->Get<types::StringValue>(i);
+          LOG(WARNING) << absl::Substitute(
+            "DummyConsumeRecords source:$0, col_idx:$1, col_name:$2, val:$3, table_id:$4, tablet_id:$5, schema:$6", source_name, j,
+            col_name, str_val, table_id, tablet_id, schema_name);
+          break;
+        }
+        default: {
+          LOG(ERROR) << absl::Substitute(
+            "DummyConsumeRecords not enum data type, source:$0, col_idx:$1, col_name:$2, data_type:$3, table_id:$4, tablet_id:$5, schema:$6",
+            source_name, j, col_name, data_type, table_id, tablet_id, schema_name);
+          break;
+        }
+      }
+//      auto& value = record_batch->at(j)->Get<types::DataTypeTraits<data_type>::value_type>(i);
+    }
+  }
+  LOG(WARNING) << absl::Substitute("DummyConsumeRecords done ... ");
+  return Status::OK();
 }
 
 }  // namespace stirling

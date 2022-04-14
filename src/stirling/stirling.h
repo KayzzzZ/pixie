@@ -194,6 +194,11 @@ class Stirling : public NotCopyable {
    * to clean-up BPF deployed resources.
    */
   virtual void Stop() = 0;
+
+  virtual Status DummyConsumeRecords(uint64_t table_id, types::TabletID tablet_id,
+                             std::unique_ptr<types::ColumnWrapperRecordBatch> record_batch) = 0;
+
+  virtual const InfoClassMiniVec& GetMiniVec() = 0;
 };
 
 namespace stirlingpb {

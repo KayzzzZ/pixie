@@ -102,8 +102,8 @@ void ConnTracker::AddConnOpenEvent(const socket_control_event_t& event) {
   }
   open_info_.timestamp_ns = event.timestamp_ns;
 
-  SetRemoteAddr(conn_event.addr, "Inferred from conn_open.");
-  SetSourceAddr(conn_event.source_addr, "Inferred from conn_open.");
+  SetRemoteAddr(event.open.addr, "Inferred from conn_open.");
+  SetSourceAddr(event.open.source_addr, "Inferred from conn_open.");
 
   SetRole(event.open.role, "Inferred from conn_open.");
 

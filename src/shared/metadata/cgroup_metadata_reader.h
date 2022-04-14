@@ -54,12 +54,16 @@ class CGroupMetadataReader : public NotCopyable {
                           std::string_view container_id, ContainerType container_type,
                           absl::flat_hash_set<uint32_t>* pid_set) const;
 
+  static StatusOr<std::vector<std::string>> ReadContainerIds(uint32_t pid);
+
  private:
   StatusOr<std::string> PodPath(PodQOSClass qos_class, std::string_view pod_id,
                                 std::string_view container_id, ContainerType container_type) const;
 
   std::unique_ptr<LegacyCGroupPathResolver> legacy_path_resolver_;
   std::unique_ptr<CGroupPathResolver> path_resolver_;
+  static std::filesystem::path proc_base_path_;
+  static std::regex container_id_reg;
 };
 
 }  // namespace md
