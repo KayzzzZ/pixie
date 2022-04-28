@@ -156,8 +156,11 @@ func init() {
 	DeployCmd.Flags().StringP("cluster_name", "u", "", "The name for your cluster. Otherwise, the name will be taken from the current kubeconfig.")
 	viper.BindPFlag("cluster_name", DeployCmd.Flags().Lookup("cluster_name"))
 
-	DeployCmd.Flags().StringP("pem_memory_limit", "p", "", "The memory limit to specify for the PEMS, otherwise a default is used.")
+	DeployCmd.Flags().StringP("pem_memory_limit", "p", "", "The memory limit to specify for the PEMs, otherwise a default is used.")
 	viper.BindPFlag("pem_memory_limit", DeployCmd.Flags().Lookup("pem_memory_limit"))
+
+	DeployCmd.Flags().StringP("pem_memory_request", "r", "", "The memory request to specify for the PEMs, otherwise a default is used.")
+	viper.BindPFlag("pem_memory_request", DeployCmd.Flags().Lookup("pem_memory_request"))
 
 	DeployCmd.Flags().StringArray("patches", []string{}, "Custom patches to apply to Pixie yamls, for example: 'vizier-pem:{\"spec\":{\"template\":{\"spec\":{\"nodeSelector\":{\"pixie\": \"allowed\"}}}}}'")
 	viper.BindPFlag("patches", DeployCmd.Flags().Lookup("patches"))
@@ -172,13 +175,13 @@ func init() {
 	DeployCmd.Flags().Bool("deploy_olm", true, "Whether to deploy Operator Lifecycle Manager. OLM is required. This should only be false if OLM is already deployed on the cluster (either manually or through another application). Note: OLM is deployed by default on Openshift clusters.")
 	viper.BindPFlag("deploy_olm", DeployCmd.Flags().Lookup("deploy_olm"))
 
-	DeployCmd.Flags().String("olm_namespace", "olm", "The memory limit to specify for the PEMS, otherwise a default is used.")
+	DeployCmd.Flags().String("olm_namespace", "olm", "The namespace to use for the Operator Lifecycle Manager")
 	viper.BindPFlag("olm_namespace", DeployCmd.Flags().Lookup("olm_namespace"))
 
 	DeployCmd.Flags().String("olm_operator_namespace", "px-operator", "The namespace to use for the Pixie operator")
 	viper.BindPFlag("olm_operator_namespace", DeployCmd.Flags().Lookup("olm_operator_namespace"))
 
-	DeployCmd.Flags().String("data_access", "Full", "Data access level defines the level of data that may be accesssed when executing a script on the cluster. Options: 'Full' and 'Restricted'")
+	DeployCmd.Flags().String("data_access", "Full", "Data access level defines the level of data that may be accessed when executing a script on the cluster. Options: 'Full' and 'Restricted'")
 	viper.BindPFlag("data_access", DeployCmd.Flags().Lookup("data_access"))
 
 	DeployCmd.Flags().Uint32("datastream_buffer_size", 1024*1024, "Internal data collector parameters: the maximum size of a data stream buffer retained between cycles.")
@@ -252,6 +255,7 @@ func runDeployCmd(cmd *cobra.Command, args []string) {
 	customLabels, _ := cmd.Flags().GetString("labels")
 	customAnnotations, _ := cmd.Flags().GetString("annotations")
 	pemMemoryLimit, _ := cmd.Flags().GetString("pem_memory_limit")
+	pemMemoryRequest, _ := cmd.Flags().GetString("pem_memory_request")
 	pemFlags, _ := cmd.Flags().GetString("pem_flags")
 	patches, _ := cmd.Flags().GetStringArray("patches")
 	dataAccess, _ := cmd.Flags().GetString("data_access")
@@ -432,6 +436,7 @@ func runDeployCmd(cmd *cobra.Command, args []string) {
 			"useEtcdOperator":      useEtcdOperator,
 			"devCloudNamespace":    devCloudNS,
 			"pemMemoryLimit":       pemMemoryLimit,
+			"pemMemoryRequest":     pemMemoryRequest,
 			"pod": &map[string]interface{}{
 				"annotations": annotationMap,
 				"labels":      labelMap,

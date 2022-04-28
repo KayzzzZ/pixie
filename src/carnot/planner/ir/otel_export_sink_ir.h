@@ -55,17 +55,20 @@ struct OTelAttribute {
 
     auto column_type = column_reference->resolved_value_type();
     DCHECK(column_type);
-    if (column_type->data_type() != types::STRING) {
+    auto column_data_type = column_type->data_type();
+
+    if (column_data_type != types::STRING && column_data_type != types::INT64 &&
+        column_data_type != types::FLOAT64 && column_data_type != types::BOOLEAN) {
       return column_reference->CreateIRNodeError(
-          "Expected attribute column '$0' to be STRING, received $1", column_reference->col_name(),
-          types::ToString(column_type->data_type()));
+          "Expected attribute column '$0' to be STRING, INT64, FLOAT64, or BOOLEAN, received $1",
+          column_reference->col_name(), types::ToString(column_data_type));
     }
 
     if (column_type->semantic_type() == types::ST_SERVICE_NAME) {
       column_pb->set_can_be_json_encoded_array(true);
     }
 
-    column_pb->set_column_type(column_type->data_type());
+    column_pb->set_column_type(column_data_type);
     PL_ASSIGN_OR_RETURN(auto index, column_reference->GetColumnIndex());
     column_pb->set_column_index(index);
     return Status::OK();
@@ -89,6 +92,10 @@ struct OTelMetricSummary {
 struct OTelMetric {
   std::string name;
   std::string description;
+
+  // Unit string is the string representing the unit. If it's not set, the compiler will attempt
+  // to determine the unit from the unit_column semantic type.
+  std::string unit_str;
   // The column where we get the unit value from.
   ColumnIR* unit_column;
 
@@ -109,6 +116,8 @@ struct OTelSpan {
 
   ColumnIR* start_time_column;
   ColumnIR* end_time_column;
+
+  int64_t span_kind;
 };
 
 struct OTelData {

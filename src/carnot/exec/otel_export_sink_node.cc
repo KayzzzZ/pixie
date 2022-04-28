@@ -68,10 +68,11 @@ Status OTelExportSinkNode::PrepareImpl(ExecState*) { return Status::OK(); }
 
 Status OTelExportSinkNode::OpenImpl(ExecState* exec_state) {
   if (plan_node_->metrics().size()) {
-    metrics_service_stub_ = exec_state->MetricsServiceStub(plan_node_->url());
+    metrics_service_stub_ =
+        exec_state->MetricsServiceStub(plan_node_->url(), plan_node_->insecure());
   }
   if (plan_node_->spans().size()) {
-    trace_service_stub_ = exec_state->TraceServiceStub(plan_node_->url());
+    trace_service_stub_ = exec_state->TraceServiceStub(plan_node_->url(), plan_node_->insecure());
   }
   return Status::OK();
 }
@@ -95,8 +96,30 @@ void AddAttributes(google::protobuf::RepeatedPtrField<::opentelemetry::proto::co
     auto otel_attr = mutable_attributes->Add();
     otel_attr->set_key(px_attr.name());
     auto attribute_col = rb.ColumnAt(px_attr.column().column_index()).get();
-    otel_attr->mutable_value()->set_string_value(
-        types::GetValueFromArrowArray<types::STRING>(attribute_col, row_idx));
+    switch (px_attr.column().column_type()) {
+      case types::STRING: {
+        otel_attr->mutable_value()->set_string_value(
+            types::GetValueFromArrowArray<types::STRING>(attribute_col, row_idx));
+        break;
+      }
+      case types::INT64: {
+        otel_attr->mutable_value()->set_int_value(
+            types::GetValueFromArrowArray<types::INT64>(attribute_col, row_idx));
+        break;
+      }
+      case types::FLOAT64: {
+        otel_attr->mutable_value()->set_double_value(
+            types::GetValueFromArrowArray<types::FLOAT64>(attribute_col, row_idx));
+        break;
+      }
+      case types::BOOLEAN: {
+        otel_attr->mutable_value()->set_bool_value(
+            types::GetValueFromArrowArray<types::BOOLEAN>(attribute_col, row_idx));
+        break;
+      }
+      default:
+        LOG(ERROR) << "Unexpected type: " << types::ToString(px_attr.column().column_type());
+    }
   }
 }
 
@@ -168,6 +191,12 @@ void ReplicateData(const std::vector<planpb::OTelAttribute>& attributes_spec,
     }
     add_data(std::move(data));
   }
+}
+
+Status FormatOTelStatus(int64_t id, const grpc::Status& status) {
+  return error::Internal(absl::Substitute(
+      "OTel export (carnot node_id=$0) failed with error '$1'. Details: $2 $3", id,
+      magic_enum::enum_name(status.error_code()), status.error_message(), status.error_details()));
 }
 
 using ::opentelemetry::proto::metrics::v1::ResourceMetrics;
@@ -248,10 +277,7 @@ Status OTelExportSinkNode::ConsumeMetrics(const RowBatch& rb) {
 
   grpc::Status status = metrics_service_stub_->Export(&context, request, &metrics_response_);
   if (!status.ok()) {
-    return error::Internal(absl::Substitute(
-        "OTelExportSinkNode $0 encountered error code $1 "
-        "exporting data, message: $2 $3",
-        plan_node_->id(), status.error_code(), status.error_message(), status.error_details()));
+    return FormatOTelStatus(plan_node_->id(), status);
   }
   return Status::OK();
 }
@@ -307,6 +333,11 @@ Status OTelExportSinkNode::ConsumeSpans(const RowBatch& rb) {
         span->set_name(types::GetValueFromArrowArray<types::STRING>(name_col, row_idx));
       }
 
+      span->set_kind(
+          static_cast<::opentelemetry::proto::trace::v1::Span::SpanKind>(span_pb.kind_value()));
+      span->mutable_status()->set_code(
+          ::opentelemetry::proto::trace::v1::Status::STATUS_CODE_UNSET);
+
       AddAttributes(span->mutable_attributes(), span_pb.attributes(), rb, row_idx);
 
       auto start_time_col = rb.ColumnAt(span_pb.start_time_column_index()).get();
@@ -361,10 +392,7 @@ Status OTelExportSinkNode::ConsumeSpans(const RowBatch& rb) {
 
   grpc::Status status = trace_service_stub_->Export(&context, request, &trace_response_);
   if (!status.ok()) {
-    return error::Internal(absl::Substitute(
-        "OTelExportSinkNode $0 encountered error code $1 "
-        "exporting data, message: $2 $3",
-        plan_node_->id(), status.error_code(), status.error_message(), status.error_details()));
+    return FormatOTelStatus(plan_node_->id(), status);
   }
   return Status::OK();
 }

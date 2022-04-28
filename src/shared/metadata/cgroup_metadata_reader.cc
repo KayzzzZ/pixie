@@ -29,15 +29,15 @@
 namespace px {
 namespace md {
 
-
-std::filesystem::path CGroupMetadataReader::proc_base_path_;
-std::regex CGroupMetadataReader::container_id_reg;
-
-CGroupMetadataReader::CGroupMetadataReader(const system::Config& cfg) {
+CGroupMetadataReader::CGroupMetadataReader(const system::Config& cfg)
+    : CGroupMetadataReader(cfg.sysfs_path().string()) {
   proc_base_path_ = cfg.proc_path();
   container_id_reg = std::regex("\b[0-9a-f]{64}\b");
+}
+
+CGroupMetadataReader::CGroupMetadataReader(std::string sysfs_path) {
   // Create the new path resolver.
-  auto path_resolver_or_status = CGroupPathResolver::Create(cfg.sysfs_path().string());
+  auto path_resolver_or_status = CGroupPathResolver::Create(sysfs_path);
   path_resolver_ = path_resolver_or_status.ConsumeValueOr(nullptr);
 
   if (path_resolver_or_status.ok()) {
@@ -51,7 +51,7 @@ CGroupMetadataReader::CGroupMetadataReader(const system::Config& cfg) {
       "Failed to create path resolver. Falling back to legacy path resolver. [error = $0]",
       path_resolver_or_status.ToString());
 
-  auto legacy_path_resolver_or_status = LegacyCGroupPathResolver::Create(cfg.sysfs_path().string());
+  auto legacy_path_resolver_or_status = LegacyCGroupPathResolver::Create(sysfs_path);
   legacy_path_resolver_ = legacy_path_resolver_or_status.ConsumeValueOr(nullptr);
 
   if (!legacy_path_resolver_or_status.ok()) {

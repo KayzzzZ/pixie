@@ -412,6 +412,8 @@ type runner struct {
 	cronScript *cvmsgspb.CronScript
 	config     *scripts.Config
 
+	lastRun time.Time
+
 	vzClient   vizierpb.VizierServiceClient
 	signingKey string
 
@@ -437,6 +439,7 @@ func (r *runner) start() {
 		return
 	}
 	ticker := time.NewTicker(time.Duration(r.cronScript.FrequencyS) * time.Second)
+	r.lastRun = time.Now()
 
 	go func() {
 		defer ticker.Stop()
@@ -455,16 +458,22 @@ func (r *runner) start() {
 				var otelEndpoint *vizierpb.Configs_OTelEndpointConfig
 				if r.config != nil && r.config.OtelEndpointConfig != nil {
 					otelEndpoint = &vizierpb.Configs_OTelEndpointConfig{
-						URL:     r.config.OtelEndpointConfig.URL,
-						Headers: r.config.OtelEndpointConfig.Headers,
+						URL:      r.config.OtelEndpointConfig.URL,
+						Headers:  r.config.OtelEndpointConfig.Headers,
+						Insecure: r.config.OtelEndpointConfig.Insecure,
 					}
 				}
 
 				// TODO(michelle): We may want to monitor the stream to ensure the script runs successfully.
+				startTime := r.lastRun
+				r.lastRun = time.Now()
 				_, err := r.vzClient.ExecuteScript(ctx, &vizierpb.ExecuteScriptRequest{
 					QueryStr: r.cronScript.Script,
 					Configs: &vizierpb.Configs{
 						OTelEndpointConfig: otelEndpoint,
+						PluginConfig: &vizierpb.Configs_PluginConfig{
+							StartTimeNs: startTime.UnixNano(),
+						},
 					},
 				})
 				if err != nil {

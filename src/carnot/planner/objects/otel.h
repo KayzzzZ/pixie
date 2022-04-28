@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "opentelemetry/proto/trace/v1/trace.pb.h"
 #include "src/carnot/planner/compiler_state/compiler_state.h"
 #include "src/carnot/planner/objects/funcobject.h"
 #include "src/carnot/planpb/plan.pb.h"
@@ -80,6 +81,8 @@ class OTelModule : public QLObject {
     url (string): The URL of the OTel collector.
     headers (Dict[string,string], optional): The connection metadata to add to the
       header of the request.
+    insecure (bool, optional): Whether to allow insecure connections to the OpenTelemetry
+      collector. False by default.
   )doc";
 
  protected:
@@ -114,6 +117,8 @@ class OTelMetrics : public QLObject {
     description (string, optional): A description of what the metric tracks.
     attributes (Dict[string, string], optional): A mapping of attribute name to the column
       name that stores data about the attribute.
+    unit (string, optional): The unit string to use for the metric. If not specified, will attempt
+      to use the Semantic Type of the `value` to infer the unit string.
   Returns:
     OTelDataContainer: the mapping of DataFrame columns to OpenTelemetry Gauge fields. Can be passed
       into `px.otel.Data()` as the data argument.
@@ -138,6 +143,8 @@ class OTelMetrics : public QLObject {
     description (string, optional): A description of what the metric tracks.
     attributes (Dict[double, Column], optional): A mapping of attribute name to the column
       name that stores data about the attribute.
+    unit (string, optional): The unit string to use for the metric. If not specified, will attempt
+      to use the Semantic Type of the quantile values to infer the unit string.
   Returns:
     OTelDataContainer: the mapping of DataFrame columns to OpenTelemetry Summary fields. Can be passed
       into `px.otel.Data()` as the data argument.
@@ -159,7 +166,7 @@ class OTelTrace : public QLObject {
       /* name */ kOTelTraceModule,
       /* type */ QLObjectType::kModule,
   };
-  static StatusOr<std::shared_ptr<OTelTrace>> Create(ASTVisitor* ast_visitor);
+  static StatusOr<std::shared_ptr<OTelTrace>> Create(ASTVisitor* ast_visitor, IR* graph);
 
   inline static constexpr char kSpanOpID[] = "Span";
   inline static constexpr char kSpanOpDocstring[] = R"doc(
@@ -185,14 +192,21 @@ class OTelTrace : public QLObject {
       will leave the parent_span_id field empty.
     attributes (Dict[string, string], optional): A mapping of attribute name to the column
       name that stores data about the attribute.
+    kind (int, optional): The OpenTelemetry SpanKind enum value to assign for all the spans. Defaults to SPAN_KIND_SERVER
+      if not set.
   Returns:
     OTelDataContainer: the mapping of DataFrame columns to OpenTelemetry Span fields. Can be passed
       into `px.otel.Data()` as the data argument.
   )doc";
 
  protected:
-  explicit OTelTrace(ASTVisitor* ast_visitor) : QLObject(OTelTraceModuleType, ast_visitor) {}
+  OTelTrace(ASTVisitor* ast_visitor, IR* graph)
+      : QLObject(OTelTraceModuleType, ast_visitor), graph_(graph) {}
   Status Init();
+  Status AddSpanKindAttribute(::opentelemetry::proto::trace::v1::Span::SpanKind kind);
+
+ private:
+  IR* graph_;
 };
 
 class EndpointConfig : public QLObject {
@@ -207,20 +221,22 @@ class EndpointConfig : public QLObject {
   };
   static StatusOr<std::shared_ptr<EndpointConfig>> Create(
       ASTVisitor* ast_visitor, std::string url,
-      std::vector<EndpointConfig::ConnAttribute> attributes);
+      std::vector<EndpointConfig::ConnAttribute> attributes, bool insecure);
 
   Status ToProto(planpb::OTelEndpointConfig* endpoint_config);
 
  protected:
   EndpointConfig(ASTVisitor* ast_visitor, std::string url,
-                 std::vector<EndpointConfig::ConnAttribute> attributes)
+                 std::vector<EndpointConfig::ConnAttribute> attributes, bool insecure)
       : QLObject(EndpointType, ast_visitor),
         url_(std::move(url)),
-        attributes_(std::move(attributes)) {}
+        attributes_(std::move(attributes)),
+        insecure_(insecure) {}
 
  private:
   std::string url_;
   std::vector<EndpointConfig::ConnAttribute> attributes_;
+  bool insecure_;
 };
 
 class OTelDataContainer : public QLObject {

@@ -18,21 +18,22 @@
 
 import * as React from 'react';
 
-import { Box, Button, Divider, Skeleton, Stack, TextField } from '@mui/material';
+import { Box, Button, Divider, FormControlLabel, Skeleton, Stack, Switch, TextField, Tooltip } from '@mui/material';
 
-import { GQLPlugin } from 'app/types/schema';
+import { useSnackbar } from 'app/components';
+import { GQLEditablePluginConfigs, GQLPlugin } from 'app/types/schema';
 
 import { usePluginConfig, usePluginConfigMutation } from './plugin-gql';
 
 export const PluginConfig = React.memo<{ plugin: GQLPlugin }>(({ plugin }) => {
   const { loading, schema, values } = usePluginConfig(plugin);
+  const showSnackbar = useSnackbar();
 
-  const [pendingValues, setPendingValues] = React.useState<Record<string, string>>({});
+  const [pendingValues, setPendingValues] = React.useState<GQLEditablePluginConfigs>({
+    configs: [],
+  });
 
   const [saving, setSaving] = React.useState(false);
-  const setDone = React.useCallback(() => {
-    setSaving(false);
-  }, []);
   const pushPluginConfig = usePluginConfigMutation(plugin);
 
   // TODO(nick,PC-1436): Race condition technically possible in save effect; make them cancellable
@@ -40,18 +41,49 @@ export const PluginConfig = React.memo<{ plugin: GQLPlugin }>(({ plugin }) => {
     e.preventDefault();
     e.stopPropagation();
     setSaving(true);
-    pushPluginConfig(
-      Object.entries(pendingValues).map(([name, value]) => ({ name, value })),
-    ).then(setDone).catch(setDone);
-  }, [pendingValues, pushPluginConfig, setDone]);
+    pushPluginConfig({
+      configs: [...pendingValues.configs],
+      customExportURL: schema?.allowCustomExportURL ? pendingValues.customExportURL : undefined,
+      insecureTLS: schema?.allowInsecureTLS ? pendingValues.insecureTLS : undefined,
+    }).then((success) => {
+      setSaving(false);
+      if (success) {
+        showSnackbar({ message: 'Changes saved', dismissible: true });
+      } else {
+        showSnackbar({ message: 'Failed to save changes!', dismissible: true });
+      }
+    }).catch((err) => {
+      setSaving(false);
+      showSnackbar({ message: 'Failed to save changes!', dismissible: true });
+      console.error(`Failed to save changes for plugin ${plugin.name}:`, err);
+    });
+  }, [
+    plugin.name,
+    pushPluginConfig,
+    schema?.allowCustomExportURL,
+    schema?.allowInsecureTLS,
+    pendingValues.configs,
+    pendingValues.customExportURL,
+    pendingValues.insecureTLS,
+    showSnackbar,
+  ]);
 
   React.useEffect(() => {
     if (!values) return;
-    setPendingValues((prev) => ({
-      ...prev,
-      ...values.reduce((accum, { name, value }) => ({ ...accum, [name]: value }), {}),
-    }));
+    setPendingValues({
+      configs: values.configs.map(({ name, value }) => ({ name, value })),
+      customExportURL: values.customExportURL,
+      insecureTLS: values.insecureTLS,
+    });
   }, [values]);
+
+  const insecureWarning = React.useMemo(() => (
+    <>
+      This plugin can be configured without TLS (Transport Layer Security).<br/>
+      In most environments, disabling TLS is a <strong>Bad Idea&trade;</strong>.<br/>
+      However, it can sometimes be useful to delay setting up TLS. This option exists for those scenarios.
+    </>
+  ), []);
 
   if (loading && (!schema || !values)) {
     return (
@@ -75,12 +107,43 @@ export const PluginConfig = React.memo<{ plugin: GQLPlugin }>(({ plugin }) => {
             variant='outlined'
             label={name}
             placeholder={description}
-            helperText={pendingValues[name] ? description : ''}
-            value={pendingValues[name] ?? ''}
-            onChange={(e) => setPendingValues((prev) => ({ ...prev, [name]: e.target.value }))}
+            helperText={pendingValues.configs.find(c => c.name === name)?.value ? description : ''}
+            value={pendingValues.configs.find(c => c.name === name)?.value ?? ''}
+            onChange={(e) => setPendingValues((prev) => ({
+              ...prev,
+              configs: [
+                ...prev.configs.filter(({ name: fname }) => fname !== name),
+                { name, value: e.target.value },
+              ],
+            }))}
             InputLabelProps={{ shrink: true }} // Always put the label up top for consistency
           />
         ))}
+        {schema?.allowCustomExportURL && (
+          <TextField
+            variant='outlined'
+            label='Custom export path'
+            placeholder='Default path for retention scripts'
+            helperText={pendingValues.customExportURL ? 'Default path for retention scripts' : ''}
+            value={pendingValues.customExportURL ?? ''}
+            onChange={(e) => setPendingValues((prev) => ({ ...prev, customExportURL: e.target.value }))}
+            InputLabelProps={{ shrink: true }}
+          />
+        )}
+        {schema?.allowInsecureTLS && (
+          <Tooltip arrow title={insecureWarning}>
+            <FormControlLabel
+              sx={{ width: 'fit-content' }}
+              label='Secure connections with TLS'
+              labelPlacement='end'
+              onClick={() => setPendingValues((prev) => ({ ...prev, insecureTLS: !prev.insecureTLS }))}
+              // eslint-disable-next-line react-memo/require-usememo
+              control={
+                <Switch size='small' checked={!pendingValues.insecureTLS} />
+              }
+            />
+          </Tooltip>
+        )}
       </Stack>
       <Divider variant='middle' sx={{ mt: 2, mb: 2 }} />
       {/* TODO(nick,PC-1436): Dedup code in the header's <MaterialSwitch />, maybe wrap form higher up */}

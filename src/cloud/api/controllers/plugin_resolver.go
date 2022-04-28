@@ -67,12 +67,14 @@ type PluginConfigResolver struct {
 type RetentionPluginConfigResolver struct {
 	Configs         []*PluginConfigResolver
 	CustomExportURL *string
+	InsecureTLS     *bool
 }
 
 // PluginInfoResolver is the resolver responsible for resolving plugin info.
 type PluginInfoResolver struct {
 	Configs              []PluginConfigResolver
 	AllowCustomExportURL bool
+	AllowInsecureTLS     bool
 }
 
 func kindGQLToCloudProto(kind string) cloudpb.PluginKind {
@@ -145,6 +147,7 @@ func (q *QueryResolver) RetentionPluginInfo(ctx context.Context, args retentionP
 	return &PluginInfoResolver{
 		Configs:              configs,
 		AllowCustomExportURL: resp.AllowCustomExportURL,
+		AllowInsecureTLS:     resp.AllowInsecureTLS,
 	}, nil
 }
 
@@ -188,7 +191,8 @@ func (q *QueryResolver) RetentionPluginConfig(ctx context.Context, args retentio
 	}
 
 	r := &RetentionPluginConfigResolver{
-		Configs: configs,
+		Configs:     configs,
+		InsecureTLS: &resp.InsecureTLS,
 	}
 
 	if resp.CustomExportUrl != "" {
@@ -206,6 +210,7 @@ type editablePluginConfig struct {
 type editablePluginConfigs struct {
 	Configs         []editablePluginConfig
 	CustomExportURL *string
+	InsecureTLS     *bool
 }
 
 type updateRetentionPluginConfigArgs struct {
@@ -242,6 +247,12 @@ func (q *QueryResolver) UpdateRetentionPluginConfig(ctx context.Context, args up
 	if args.Configs.CustomExportURL != nil {
 		req.CustomExportUrl = &types.StringValue{
 			Value: *args.Configs.CustomExportURL,
+		}
+	}
+
+	if args.Configs.InsecureTLS != nil {
+		req.InsecureTLS = &types.BoolValue{
+			Value: *args.Configs.InsecureTLS,
 		}
 	}
 

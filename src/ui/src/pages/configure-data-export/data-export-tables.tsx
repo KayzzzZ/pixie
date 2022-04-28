@@ -20,6 +20,7 @@ import * as React from 'react';
 
 import {
   Add as AddIcon,
+  Delete as DeleteIcon,
   Extension as ExtensionIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material';
@@ -27,6 +28,10 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   FormControlLabel,
   IconButton,
@@ -39,11 +44,12 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { styled, Theme } from '@mui/material/styles';
+import { createStyles, makeStyles } from '@mui/styles';
 import { distanceInWordsStrict } from 'date-fns';
 import { Link, useRouteMatch } from 'react-router-dom';
 
-import { Spinner } from 'app/components';
+import { Spinner, useSnackbar } from 'app/components';
 import {
   GQLClusterStatus,
   GQLRetentionScript,
@@ -51,6 +57,7 @@ import {
 
 import {
   useClustersForRetentionScripts,
+  useDeleteRetentionScript,
   useRetentionPlugins,
   useRetentionScript,
   useRetentionScripts,
@@ -115,6 +122,33 @@ const RetentionScriptRow = React.memo<{ script: GQLRetentionScript }>(({ script 
       .catch(() => setSaving(false));
   }, [detailedScript, toggleMutation]);
 
+  const showSnackbar = useSnackbar();
+  const [promptingDelete, setPromptingDelete] = React.useState(false);
+  const deleteMutation = useDeleteRetentionScript(id);
+  const confirmDelete = React.useCallback(() => {
+    setSaving(true);
+    deleteMutation().then(
+      (success) => {
+        setSaving(false);
+        if (success) {
+          setPromptingDelete(false);
+        } else {
+          showSnackbar({
+            message: `Failed to delete script "${name}", unknown reason`,
+          });
+        }
+      },
+      (err) => {
+        setSaving(false);
+        console.error(err);
+        showSnackbar({
+          message: `Failed to delete script "${name}", see console for details`,
+        });
+      },
+    );
+    setSaving(false);
+  }, [deleteMutation, name, showSnackbar]);
+
   return (
     /* eslint-disable react-memo/require-usememo */
     <TableRow key={id}>
@@ -162,6 +196,23 @@ const RetentionScriptRow = React.memo<{ script: GQLRetentionScript }>(({ script 
             <SettingsIcon />
           </IconButton>
         </Tooltip>
+        {!script.isPreset && (
+          <>
+            <Tooltip title='Delete this script'>
+              <IconButton onClick={() => setPromptingDelete(true)} disabled={saving}>
+                <DeleteIcon />
+              </IconButton>
+            </Tooltip>
+            <Dialog open={promptingDelete} onClose={() => setPromptingDelete(false)}>
+              <DialogTitle>Delete Script</DialogTitle>
+              <DialogContent>{`Delete script "${name}"? This cannot be undone.`}</DialogContent>
+              <DialogActions>
+                <Button onClick={() => setPromptingDelete(false)} variant='outlined' color='primary'>Cancel</Button>
+                <Button onClick={confirmDelete} variant='contained' color='error'>Delete Script</Button>
+              </DialogActions>
+            </Dialog>
+          </>
+        )}
       </TableCell>
     </TableRow>
     /* eslint-enable react-memo/require-usememo */
@@ -200,7 +251,7 @@ const RetentionScriptTable = React.memo<{
           Create Script
         </Button>
       )}
-      <Typography variant='h2' ml={2} mb={2}>{title} Scripts</Typography>
+      <Typography variant='h3' ml={2} mb={2}>{title}</Typography>
       {description.length > 0 && <Typography variant='subtitle2' ml={2} mb={4}>{description}</Typography>}
       {scripts.length > 0 ? (
         <Table>
@@ -226,16 +277,21 @@ const RetentionScriptTable = React.memo<{
 });
 RetentionScriptTable.displayName = 'RetentionScriptTable';
 
-
-/*/
-TODO(nick,PC-1440):
-- Typography styles
-  - Ellipsis + tooltip on all columns
-- Clusters column:
-  - 'X more...' or '(+X)' badge that shows the whole list in line-break separated tooltip
-/*/
+const useStyles = makeStyles(({ palette }: Theme) => createStyles({
+  link: {
+    textDecoration: 'none',
+    '&, &:visited': {
+      color: palette.primary.main,
+    },
+    '&:hover': {
+      textDecoration: 'underline',
+    },
+  },
+}), { name: 'DataExport' });
 
 export const ConfigureDataExportBody = React.memo(() => {
+  const classes = useStyles();
+
   const { loading: loadingScripts, scripts } = useRetentionScripts();
   const { loading: loadingPlugins, plugins } = useRetentionPlugins();
 
@@ -253,11 +309,22 @@ export const ConfigureDataExportBody = React.memo(() => {
   return (
     /* eslint-disable react-memo/require-usememo */
     <Box m={2} mt={4} mb={4}>
+      <Typography variant='h1' ml={2} mb={2}>Data Retention Scripts</Typography>
+      <Typography variant='body1' ml={2} mb={2}>
+        {'These scripts are provided by your '}
+        <Link to='/admin/plugins' className={classes.link}>
+          enabled plugins
+        </Link>.
+        They&apos;re enabled by default.<br/>
+        Their PxL script can&apos;t be changed, but other options can.<br/>
+        Custom scripts can be created at the bottom of this page.
+      </Typography>
+      <Divider variant='middle' sx={{ mt: 4, mb: 4 }} />
       {enabledPlugins.map(({ id, name, description }, i) => (
         <React.Fragment key={id}>
           {i > 0 && <Divider variant='middle' sx={{ mt: 4, mb: 4 }} />}
           <RetentionScriptTable
-            title={name}
+            title={`Presets from ${name}`}
             description={description}
             scripts={scripts.filter(s => s.pluginID === id && s.isPreset).sort((a, b) => a.name.localeCompare(b.name))}
           />
@@ -265,7 +332,7 @@ export const ConfigureDataExportBody = React.memo(() => {
       ))}
       {enabledPlugins.length > 0 && <Divider variant='middle' sx={{ mt: 4, mb: 4 }} />}
       <RetentionScriptTable
-        title='Custom'
+        title='Custom Scripts'
         description='Pixie can send results from custom scripts to long-term data stores at any desired frequency.'
         scripts={scripts.filter(s => !s.isPreset).sort((a, b) => a.name.localeCompare(b.name))}
         isCustom={true}
