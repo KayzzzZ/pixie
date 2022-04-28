@@ -107,8 +107,6 @@ void ConnTracker::AddConnOpenEvent(const socket_control_event_t& event) {
 
   SetRole(event.open.role, "Inferred from conn_open.");
 
-  CONN_TRACE(1) << absl::Substitute("conn_open: $0, af=$1 addr=$2 source_addr=$3",
-                                    ::ToString(event), magic_enum::enum_name(open_info_.remote_addr.family),
   VLOG(1) << absl::Substitute("conn_open af=$0 addr=$1 source_addr=$2",
                                     magic_enum::enum_name(open_info_.remote_addr.family),
                                     open_info_.remote_addr.AddrStr(), open_info_.source_addr.AddrStr());
@@ -780,7 +778,7 @@ void ConnTracker::IterationPreTick(
 
   // If remote_addr is missing, it means the connect/accept was not traced.
   // Attempt to infer the connection information, to populate remote_addr.
-  if ((open_info_.remote_addr.family == SockAddrFamily::kUnspecified || open_info.source_addr.family == SockAddrFamily::kUnspecified)
+  if ((open_info_.remote_addr.family == SockAddrFamily::kUnspecified || open_info_.source_addr.family == SockAddrFamily::kUnspecified)
       && socket_info_mgr != nullptr) {
     InferConnInfo(proc_parser, socket_info_mgr);
 
