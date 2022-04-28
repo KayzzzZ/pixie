@@ -89,3 +89,11 @@ DEFINE_MIN_FN_FOR_TYPE(int64_t)
 DEFINE_MIN_FN_FOR_TYPE(uint64_t)
 DEFINE_MIN_FN_FOR_TYPE(size_t)
 #undef DEFINE_MIN_FN_FOR_TYPE
+
+static __inline int64_t min_int64(int64_t l, int64_t r) { return l < r ? l : r; }
+
+#define _READ(P) ({ typeof(P) _val;        \
+        memset(&_val, 0, sizeof(_val));    \
+        bpf_probe_read(&_val, sizeof(_val), &P);  \
+        _val;          \
+     })
