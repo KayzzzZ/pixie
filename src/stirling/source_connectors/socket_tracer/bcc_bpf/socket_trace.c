@@ -296,26 +296,19 @@ static __inline void update_traffic_class(struct conn_info_t* conn_info,
 static __inline void read_source_sockaddr_kernel(struct conn_info_t* conn_info,
                                                  const struct socket* socket) {
   struct sock* sk = NULL;
-  bpf_probe_read_kernel(&sk, sizeof(sk), &socket->sk);
+  BPF_PROBE_READ_KERNEL_VAR(sk, &socket->sk);
 
   struct sock_common* sk_common = &sk->__sk_common;
-  uint16_t family = -1;
   uint16_t sport = -1;
   bpf_probe_read_kernel(&sport, sizeof(sport), &((struct inet_sock *)sk)->inet_sport);
+  conn_info->source_addr.sa.sa_family = conn_info->addr.sa.sa_family;
 
-  bpf_probe_read_kernel(&family, sizeof(family), &sk_common->skc_family);
-  conn_info->source_addr.sa.sa_family = family;
-
-  if (family == AF_INET) {
+  if (conn_info->source_addr.sa.sa_family == AF_INET) {
     conn_info->source_addr.in4.sin_port = sport;
-
-    uint32_t* addr = &conn_info->source_addr.in4.sin_addr.s_addr;
-    bpf_probe_read_kernel(addr, sizeof(*addr), &sk_common->skc_rcv_saddr);
-  } else if (family == AF_INET6) {
+    BPF_PROBE_READ_KERNEL_VAR(conn_info->source_addr.in4.sin_addr.s_addr, &sk_common->skc_rcv_saddr);
+  } else if (conn_info->source_addr.sa.sa_family == AF_INET6) {
     conn_info->source_addr.in6.sin6_port = sport;
-
-    struct in6_addr* addr = &conn_info->source_addr.in6.sin6_addr;
-    bpf_probe_read_kernel(addr, sizeof(*addr), &sk_common->skc_v6_rcv_saddr);
+    BPF_PROBE_READ_KERNEL_VAR(conn_info->source_addr.in6.sin6_addr, &sk_common->skc_v6_rcv_saddr);
   }
 }
 
