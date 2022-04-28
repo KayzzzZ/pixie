@@ -29,6 +29,9 @@
 namespace px {
 namespace md {
 
+std::filesystem::path CGroupMetadataReader::proc_base_path_;
+std::regex CGroupMetadataReader::container_id_reg;
+
 CGroupMetadataReader::CGroupMetadataReader(const system::Config& cfg)
     : CGroupMetadataReader(cfg.sysfs_path().string()) {
   proc_base_path_ = cfg.proc_path();
