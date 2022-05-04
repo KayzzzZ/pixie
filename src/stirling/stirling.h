@@ -199,6 +199,9 @@ class Stirling : public NotCopyable {
                              std::unique_ptr<types::ColumnWrapperRecordBatch> record_batch) = 0;
 
   virtual const InfoClassMiniVec& GetMiniVec() = 0;
+
+  virtual size_t GetMinVecSize() = 0;
+  InfoClassMini* GetInfoClassMiniAt(int index) = 0;
 };
 
 namespace stirlingpb {
