@@ -218,8 +218,8 @@ class StirlingImpl final : public Stirling {
   Status DummyConsumeRecords(uint64_t table_id, types::TabletID tablet_id,
                         std::unique_ptr<types::ColumnWrapperRecordBatch> record_batch) override;
   const InfoClassMiniVec& GetMiniVec() override { return info_class_mini_mgrs_; }
-  size_t GetMinVecSize() { return info_class_mini_mgrs_.size(); }
-  InfoClassMini* GetInfoClassMiniAt(int index) { info_class_mini_mgrs_.at(index).get(); }
+  size_t GetMinVecSize() override { return info_class_mini_mgrs_.size(); }
+  InfoClassMini* GetInfoClassMiniAt(int index) override { return info_class_mini_mgrs_.at(index).get(); }
 
  private:
   // Adds a source to Stirling, and updates all state accordingly.
