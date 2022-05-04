@@ -201,7 +201,7 @@ class Stirling : public NotCopyable {
   virtual const InfoClassMiniVec& GetMiniVec() = 0;
 
   virtual size_t GetMinVecSize() = 0;
-  InfoClassMini* GetInfoClassMiniAt(int index) = 0;
+  virtual InfoClassMini* GetInfoClassMiniAt(int index) = 0;
 };
 
 namespace stirlingpb {
