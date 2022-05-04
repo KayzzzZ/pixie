@@ -89,6 +89,8 @@ std::vector<std::string_view> GetSourceNamesForGroup(SourceConnectorGroup group)
         ProcessStatsConnector::kName,
         NetworkStatsConnector::kName,
         JVMStatsConnector::kName,
+        PIDRuntimeConnector::kName,
+        ProcStatConnector::kName,
         SocketTraceConnector::kName,
         PerfProfileConnector::kName,
         proc_exit_tracer::ProcExitConnector::kName
@@ -117,6 +119,11 @@ std::vector<std::string_view> GetSourceNamesForGroup(SourceConnectorGroup group)
     case SourceConnectorGroup::kProfiler:
       return {
         PerfProfileConnector::kName
+      };
+    case SourceConnectorGroup::kProcess:
+      return {
+        PIDRuntimeConnector::kName,
+        ProcStatConnector::kName,
       };
     default:
       // To keep GCC happy.

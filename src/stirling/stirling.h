@@ -58,6 +58,8 @@ enum class SourceConnectorGroup {
 
   // The stack trace profiler.
   kProfiler,
+
+  kProcess,
 };
 
 /**
